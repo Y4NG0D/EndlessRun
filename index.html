@@ -2,860 +2,649 @@
 <html lang="pt-BR">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Endless Runner Platformer</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Neon Runner - O Despertar</title>
     <style>
+        @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
         body, html {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            background-color: #1a1a1a;
-            overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            color: white;
-            user-select: none;
+            margin: 0; padding: 0; width: 100%; height: 100%;
+            background-color: #050510; color: #fff;
+            font-family: 'Press Start 2P', cursive; overflow: hidden;
+            touch-action: none; /* Previne scroll no mobile */
+        }
+
+        #game-container {
+            position: relative; width: 100%; height: 100vh;
+            display: flex; justify-content: center; align-items: center;
         }
 
         canvas {
-            display: block;
-            width: 100%;
-            height: 100%;
+            display: block; background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
+            box-shadow: 0 0 20px #0ff5; max-width: 100%; max-height: 100%;
         }
 
-        #ui-layer {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            pointer-events: none; /* Deixa os cliques passarem para a tela de start */
+        /* HUD - Informações na tela */
+        #hud {
+            position: absolute; top: 10px; left: 10px; right: 10px;
+            display: flex; justify-content: space-between;
+            font-size: 12px; pointer-events: none; z-index: 10;
+            text-shadow: 2px 2px 0px #000;
         }
+        
+        .hud-group { display: flex; flex-direction: column; gap: 8px; }
+        .text-neon-blue { color: #0ff; text-shadow: 0 0 5px #0ff; }
+        .text-neon-pink { color: #f0f; text-shadow: 0 0 5px #f0f; }
 
-        .hud {
-            position: absolute;
-            top: 20px;
-            left: 20px;
-            font-size: 24px;
-            font-weight: bold;
-            text-shadow: 2px 2px 0 #000;
-        }
-
-        #health-bar {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        .heart {
-            width: 25px;
-            height: 25px;
-            background-color: #ff3333;
-            border: 2px solid #fff;
-            border-radius: 4px;
-            transform: rotate(45deg);
-        }
-
-        .heart.empty {
-            background-color: transparent;
-            border-color: #777;
-        }
-
-        /* Telas de Menu e Game Over */
+        /* Menus sobrepostos */
         .overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            pointer-events: auto;
-            transition: opacity 0.3s;
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.85);
+            display: flex; flex-direction: column; justify-content: center; align-items: center;
+            z-index: 20; text-align: center; display: none;
         }
 
-        .overlay.hidden {
-            opacity: 0;
-            pointer-events: none;
+        .overlay.active { display: flex; }
+        h1 { color: #0ff; text-shadow: 0 0 10px #0ff, 0 0 20px #0ff; font-size: 32px; margin-bottom: 10px; }
+        h2 { color: #f0f; text-shadow: 0 0 10px #f0f; font-size: 20px; margin-bottom: 20px; }
+        p { line-height: 1.5; font-size: 12px; max-width: 600px; margin-bottom: 20px;}
+
+        button {
+            background: transparent; border: 2px solid #0ff; color: #0ff;
+            padding: 15px 20px; font-family: inherit; font-size: 14px;
+            cursor: pointer; transition: all 0.2s; text-transform: uppercase;
+            box-shadow: 0 0 10px #0ff inset, 0 0 10px #0ff; margin: 10px;
         }
 
-        h1 {
-            font-size: 48px;
-            color: #4da6ff;
-            text-shadow: 3px 3px 0 #000;
-            margin-bottom: 10px;
-        }
+        button:hover { background: #0ff; color: #000; }
 
-        p {
-            font-size: 18px;
-            color: #ccc;
-            text-align: center;
-            max-width: 600px;
-            line-height: 1.5;
+        /* Sistema de Upgrades */
+        #upgrade-cards {
+            display: flex; gap: 20px; flex-wrap: wrap; justify-content: center;
         }
+        .card {
+            border: 2px solid #f0f; padding: 20px; width: 220px;
+            background: rgba(20, 0, 30, 0.9); cursor: pointer;
+            box-shadow: 0 0 10px #f0f; transition: transform 0.2s;
+        }
+        .card:hover { transform: scale(1.05); background: rgba(255, 0, 255, 0.2); }
+        .card h3 { color: #f0f; font-size: 14px; margin-top: 0;}
+        .card p { font-size: 10px; margin-bottom: 0; color: #ccc;}
 
-        .controls-info {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 20px;
-            border-radius: 10px;
-            margin-top: 20px;
+        /* Controles Mobile (Invisíveis no PC) */
+        #mobile-controls {
+            position: absolute; bottom: 20px; left: 0; width: 100%;
+            display: none; justify-content: space-between; padding: 0 20px;
+            box-sizing: border-box; z-index: 15;
         }
-        
-        .controls-info ul {
-            list-style: none;
-            padding: 0;
+        .btn-group { display: flex; gap: 15px; }
+        .mobile-btn {
+            width: 50px; height: 50px; background: rgba(0, 255, 255, 0.2);
+            border: 2px solid rgba(0, 255, 255, 0.5); border-radius: 50%;
+            color: rgba(255,255,255,0.7); display: flex; justify-content: center; align-items: center;
+            user-select: none; font-size: 20px; font-weight: bold; font-family: sans-serif;
         }
+        .mobile-btn:active { background: rgba(0, 255, 255, 0.6); }
 
-        .controls-info li {
-            margin-bottom: 8px;
-        }
-
-        .btn {
-            margin-top: 30px;
-            padding: 15px 40px;
-            font-size: 24px;
-            font-weight: bold;
-            color: #fff;
-            background-color: #4da6ff;
-            border: none;
-            border-radius: 8px;
-            cursor: pointer;
-            box-shadow: 0 5px 0 #0066cc;
-            transition: transform 0.1s, box-shadow 0.1s;
-        }
-
-        .btn:active {
-            transform: translateY(5px);
-            box-shadow: 0 0 0 #0066cc;
-        }
-        
-        .btn:hover {
-            background-color: #66b3ff;
+        @media (max-width: 768px) {
+            #mobile-controls { display: flex; }
+            h1 { font-size: 20px; }
+            .card { width: 100%; margin-bottom: 10px;}
         }
     </style>
 </head>
 <body>
 
-    <canvas id="gameCanvas"></canvas>
-
-    <div id="ui-layer">
-        <div class="hud" id="hud" style="display: none;">
-            <div id="score">Distância: 0m</div>
-            <div id="health-bar">
-                <div class="heart"></div>
-                <div class="heart"></div>
-                <div class="heart"></div>
-            </div>
+<div id="game-container">
+    <canvas id="gameCanvas" width="800" height="450"></canvas>
+    
+    <div id="hud">
+        <div class="hud-group">
+            <span id="scoreDisplay">Distância: 0m</span>
+            <span id="crystalDisplay" class="text-neon-blue">Cristais: 0</span>
+        </div>
+        <div class="hud-group" style="text-align: right;">
+            <span id="highScoreDisplay" class="text-neon-pink">Recorde: 0m</span>
+            <span id="hpDisplay">Vida: ❤️❤️❤️</span>
         </div>
     </div>
 
-    <!-- Tela Inicial -->
-    <div id="startScreen" class="overlay">
-        <h1>Neon Runner</h1>
-        <div class="controls-info">
-            <p><strong>Controles:</strong></p>
-            <ul>
-                <li>⬅️ ➡️ : Mover Esquerda / Direita</li>
-                <li>⬆️ : Pular</li>
-                <li>⬇️ : Agachar</li>
-                <li>[ESPAÇO] : Atacar (Cria área de dano na frente)</li>
-            </ul>
+    <!-- Menus -->
+    <div id="start-menu" class="overlay active">
+        <h1>NEON RUNNER</h1>
+        <p>Setas: Mover | Cima: Pular | Baixo: Agachar | Espaço: Atacar | Esc: Pausar</p>
+        <button onclick="startGame()">Iniciar Jogo</button>
+    </div>
+
+    <div id="pause-menu" class="overlay">
+        <h1>PAUSADO</h1>
+        <button onclick="togglePause()">Continuar</button>
+    </div>
+
+    <div id="game-over-menu" class="overlay">
+        <h1 style="color: #f00; text-shadow: 0 0 10px #f00;">SISTEMA FALHOU</h1>
+        <h2>Distância: <span id="finalScore"></span>m</h2>
+        <button onclick="resetGame()">Tentar Novamente</button>
+    </div>
+
+    <div id="upgrade-menu" class="overlay">
+        <h1>UPGRADE DISPONÍVEL</h1>
+        <p>Escolha uma melhoria para seus sistemas:</p>
+        <div id="upgrade-cards">
+            <!-- Gerados via JS -->
         </div>
-        <button class="btn" id="startBtn">JOGAR</button>
     </div>
 
-    <!-- Tela de Game Over -->
-    <div id="gameOverScreen" class="overlay hidden">
-        <h1 style="color: #ff3333;">FIM DE JOGO</h1>
-        <p id="finalScore" style="font-size: 24px; color: #fff;">Distância: 0m</p>
-        <button class="btn" id="restartBtn">TENTAR NOVAMENTE</button>
+    <!-- Controles Mobile -->
+    <div id="mobile-controls">
+        <div class="btn-group">
+            <div class="mobile-btn" id="btn-left">◄</div>
+            <div class="mobile-btn" id="btn-right">►</div>
+        </div>
+        <div class="btn-group">
+            <div class="mobile-btn" id="btn-atk">X</div>
+            <div class="mobile-btn" id="btn-jump">▲</div>
+            <div class="mobile-btn" id="btn-crouch">▼</div>
+        </div>
     </div>
+</div>
 
-    <script>
-        // ==========================================
-        // SISTEMA DE ÁUDIO (Web Audio API)
-        // Sintetiza todos os sons sem arquivos externos
-        // ==========================================
-        const audio = {
-            ctx: null,
-            bgmInterval: null,
-            bgmStep: 0,
-            isPlaying: false,
+<script>
+    // --- Configuração do Canvas e Contexto ---
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
 
-            init() {
-                if (!this.ctx) {
-                    this.ctx = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                if (this.ctx.state === 'suspended') {
-                    this.ctx.resume();
-                }
-            },
-
-            playTone(freq, type, duration, vol = 0.1) {
-                if (!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                
-                osc.type = type;
-                osc.frequency.setValueAtTime(freq, this.ctx.currentTime);
-                
-                gain.gain.setValueAtTime(vol, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + duration);
-                
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                
-                osc.start();
-                osc.stop(this.ctx.currentTime + duration);
-                return osc;
-            },
-
-            jump() {
-                if (!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(150, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(400, this.ctx.currentTime + 0.2);
-                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.2);
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.2);
-            },
-
-            attack() {
-                this.playTone(800, 'sawtooth', 0.1, 0.1);
-            },
-
-            crouch() {
-                if (!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.type = 'triangle';
-                osc.frequency.setValueAtTime(200, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(100, this.ctx.currentTime + 0.1);
-                gain.gain.setValueAtTime(0.1, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.1);
-            },
-
-            hit() {
-                // Som dissonante para dano recebido
-                this.playTone(100, 'sawtooth', 0.3, 0.2);
-                this.playTone(110, 'square', 0.3, 0.2);
-            },
-
-            enemyDeath() {
-                // Som agudo de explosãozinha
-                if (!this.ctx) return;
-                const osc = this.ctx.createOscillator();
-                const gain = this.ctx.createGain();
-                osc.type = 'square';
-                osc.frequency.setValueAtTime(400, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(50, this.ctx.currentTime + 0.15);
-                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
-                osc.connect(gain);
-                gain.connect(this.ctx.destination);
-                osc.start();
-                osc.stop(this.ctx.currentTime + 0.15);
-            },
-
-            startBGM() {
-                if (this.bgmInterval) return;
-                this.isPlaying = true;
-                // Melodia simples em loop
-                const melody = [
-                    220, 220, 330, 220, 
-                    440, 330, 220, 164,
-                    220, 220, 330, 220,
-                    440, 493, 440, 330
-                ];
-                const bass = [
-                    110, 110, 110, 110,
-                    82.4, 82.4, 82.4, 82.4
-                ];
-                
-                this.bgmInterval = setInterval(() => {
-                    if (!this.isPlaying) return;
-                    // Toca a melodia
-                    let mFreq = melody[this.bgmStep % melody.length];
-                    if (mFreq) this.playTone(mFreq, 'square', 0.15, 0.03);
-                    
-                    // Toca o baixo (mais lento)
-                    if (this.bgmStep % 2 === 0) {
-                        let bFreq = bass[Math.floor((this.bgmStep/2) % bass.length)];
-                        this.playTone(bFreq, 'triangle', 0.3, 0.05);
-                    }
-                    
-                    this.bgmStep++;
-                }, 150); // 150ms per step (aprox 100 BPM 16th notes)
-            },
-            
-            stopBGM() {
-                this.isPlaying = false;
-                if (this.bgmInterval) {
-                    clearInterval(this.bgmInterval);
-                    this.bgmInterval = null;
-                }
-            }
-        };
-
-        // ==========================================
-        // VARIÁVEIS GLOBAIS E CONFIGURAÇÃO
-        // ==========================================
-        const canvas = document.getElementById('gameCanvas');
-        const ctx = canvas.getContext('2d');
+    // --- Sistema de Áudio (Web Audio API Simples) ---
+    const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    function playSound(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain); gain.connect(audioCtx.destination);
         
-        let GAME_WIDTH = window.innerWidth;
-        let GAME_HEIGHT = window.innerHeight;
-        canvas.width = GAME_WIDTH;
-        canvas.height = GAME_HEIGHT;
+        const now = audioCtx.currentTime;
+        if (type === 'jump') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(300, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1); osc.start(now); osc.stop(now + 0.1);
+        } else if (type === 'hit') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(50, now + 0.2);
+            gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.2); osc.start(now); osc.stop(now + 0.2);
+        } else if (type === 'crystal') {
+            osc.type = 'sine'; osc.frequency.setValueAtTime(800, now); osc.frequency.linearRampToValueAtTime(1200, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.1); osc.start(now); osc.stop(now + 0.1);
+        } else if (type === 'attack') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
+            gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1); osc.start(now); osc.stop(now + 0.1);
+        }
+    }
 
-        window.addEventListener('resize', () => {
-            GAME_WIDTH = window.innerWidth;
-            GAME_HEIGHT = window.innerHeight;
-            canvas.width = GAME_WIDTH;
-            canvas.height = GAME_HEIGHT;
-        });
+    // --- Estado do Jogo (Persistência) ---
+    const game = {
+        state: 'START', // START, PLAYING, PAUSED, UPGRADE, GAMEOVER
+        lastTime: 0, cameraX: 0, distance: 0, crystals: 0,
+        highScore: parseInt(localStorage.getItem('neonHighScore')) || 0,
+        totalCrystals: parseInt(localStorage.getItem('neonTotalCrystals')) || 0,
+        nextUpgradeDist: 500
+    };
 
-        // Controles de input
-        const keys = {
-            ArrowLeft: false,
-            ArrowRight: false,
-            ArrowUp: false,
-            ArrowDown: false,
-            Space: false
-        };
-
-        window.addEventListener('keydown', (e) => {
-            if (e.code === 'ArrowLeft') keys.ArrowLeft = true;
-            if (e.code === 'ArrowRight') keys.ArrowRight = true;
-            if (e.code === 'ArrowUp') keys.ArrowUp = true;
-            if (e.code === 'ArrowDown') keys.ArrowDown = true;
-            if (e.code === 'Space') keys.Space = true;
-        });
-
-        window.addEventListener('keyup', (e) => {
-            if (e.code === 'ArrowLeft') keys.ArrowLeft = false;
-            if (e.code === 'ArrowRight') keys.ArrowRight = false;
-            if (e.code === 'ArrowUp') keys.ArrowUp = false;
-            if (e.code === 'ArrowDown') keys.ArrowDown = false;
-            if (e.code === 'Space') keys.Space = false;
-        });
-
-        // ==========================================
-        // CLASSES DO JOGO
-        // ==========================================
+    // --- Entidades ---
+    const player = {
+        x: 100, y: 100, width: 30, height: 50,
+        vx: 0, vy: 0, speed: 250, jumpForce: -550, gravity: 1200,
+        hp: 3, maxHp: 3,
+        isGrounded: false, isCrouching: false,
         
-        class Player {
-            constructor() {
-                this.width = 40;
-                this.normalHeight = 60;
-                this.crouchHeight = 30;
-                this.height = this.normalHeight;
-                
-                this.x = 100;
-                this.y = GAME_HEIGHT / 2;
-                
-                this.vx = 0;
-                this.vy = 0;
-                this.speed = 400; // pixels por segundo
-                this.jumpForce = -700;
-                this.gravity = 1500;
-                
-                this.grounded = false;
-                this.isCrouching = false;
-                this.facingRight = true;
-                
-                this.maxHealth = 3;
-                this.health = this.maxHealth;
-                this.invulnerableTimer = 0;
-                
-                this.isAttacking = false;
-                this.attackDuration = 0.2; // segundos
-                this.attackTimer = 0;
-                this.attackCooldown = 0.4;
-                this.attackCooldownTimer = 0;
-                this.attackRange = 60;
-                
-                this.color = '#4da6ff'; // Azul
-                this.crouchColor = '#2980b9'; // Azul mais escuro
-            }
+        // Combate
+        isAttacking: false, attackTimer: 0, attackDuration: 0.25,
+        attackCooldown: 0.1, cooldownTimer: 0,
+        hitEnemiesThisAttack: new Set(), // Garante 1 hit por ataque por inimigo
+        invulnerableTimer: 0,
 
-            update(dt, platforms, enemies) {
-                // Timers
-                if (this.invulnerableTimer > 0) this.invulnerableTimer -= dt;
-                if (this.attackCooldownTimer > 0) this.attackCooldownTimer -= dt;
-                
-                // Lógica de Ataque
-                if (keys.Space && this.attackCooldownTimer <= 0 && !this.isCrouching) {
-                    this.isAttacking = true;
-                    this.attackTimer = this.attackDuration;
-                    this.attackCooldownTimer = this.attackCooldown;
-                    audio.attack();
-                }
+        // Atributos de Upgrade
+        maxJumps: 1, jumpsLeft: 1,
+        attackRangeMult: 1, magnetRange: 0
+    };
 
-                if (this.isAttacking) {
-                    this.attackTimer -= dt;
-                    if (this.attackTimer <= 0) {
-                        this.isAttacking = false;
-                    }
-                    // Checar colisão do ataque com inimigos
-                    this.checkAttackHits(enemies);
-                }
+    let platforms = [];
+    let enemies = [];
+    let crystals = [];
+    let particles = [];
 
-                // Lógica de Agachar
-                if (keys.ArrowDown && this.grounded && !this.isAttacking) {
-                    if (!this.isCrouching) {
-                        this.isCrouching = true;
-                        this.y += this.normalHeight - this.crouchHeight; // Ajusta posição para não flutuar
-                        this.height = this.crouchHeight;
-                        audio.crouch();
-                    }
-                } else {
-                    if (this.isCrouching) {
-                        // Verifica se tem teto (neste jogo não, mas boa prática)
-                        this.isCrouching = false;
-                        this.y -= this.normalHeight - this.crouchHeight;
-                        this.height = this.normalHeight;
-                    }
-                }
+    // --- Upgrades (Roguelite) ---
+    const upgrades = [
+        { id: 'jump', name: 'Pulo Duplo', desc: 'Permite saltar no ar.', apply: () => player.maxJumps = 2 },
+        { id: 'magnet', name: 'Ímã Neon', desc: 'Atrai cristais próximos.', apply: () => player.magnetRange = 150 },
+        { id: 'blade', name: 'Lâmina Longa', desc: 'Dobra o alcance do ataque.', apply: () => player.attackRangeMult = 2 },
+        { id: 'heal', name: 'Nanorreparo', desc: 'Recupera 1 de HP.', apply: () => player.hp = Math.min(player.maxHp, player.hp + 1) },
+        { id: 'speed', name: 'Sobrecarga', desc: 'Aumenta a velocidade.', apply: () => player.speed += 50 }
+    ];
 
-                // Lógica de Movimento X
-                if (!this.isCrouching) {
-                    if (keys.ArrowLeft) {
-                        this.vx = -this.speed;
-                        this.facingRight = false;
-                    } else if (keys.ArrowRight) {
-                        this.vx = this.speed;
-                        this.facingRight = true;
-                    } else {
-                        this.vx = 0; // Para imediatamente se soltar
-                    }
-                } else {
-                    this.vx = 0; // Não move enquanto agachado
-                }
+    // --- Controles (Teclado e Toque) ---
+    const keys = { right: false, left: false, up: false, down: false, attack: false };
+    
+    window.addEventListener('keydown', e => {
+        if (e.code === 'ArrowRight') keys.right = true;
+        if (e.code === 'ArrowLeft') keys.left = true;
+        if (e.code === 'ArrowUp' && !keys.up) { keys.up = true; jump(); }
+        if (e.code === 'ArrowDown') keys.down = true;
+        if (e.code === 'Space' && !keys.attack) { keys.attack = true; attack(); }
+        if (e.code === 'Escape') togglePause();
+    });
 
-                // Lógica de Pulo
-                if (keys.ArrowUp && this.grounded && !this.isCrouching) {
-                    this.vy = this.jumpForce;
-                    this.grounded = false;
-                    audio.jump();
-                }
+    window.addEventListener('keyup', e => {
+        if (e.code === 'ArrowRight') keys.right = false;
+        if (e.code === 'ArrowLeft') keys.left = false;
+        if (e.code === 'ArrowUp') keys.up = false;
+        if (e.code === 'ArrowDown') keys.down = false;
+        if (e.code === 'Space') keys.attack = false;
+    });
 
-                // Aplica gravidade
-                this.vy += this.gravity * dt;
+    // Mapeamento Mobile
+    const bindBtn = (id, key, actionDown) => {
+        const btn = document.getElementById(id);
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; if(actionDown) actionDown(); });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
+    };
+    bindBtn('btn-right', 'right'); bindBtn('btn-left', 'left'); bindBtn('btn-crouch', 'down');
+    bindBtn('btn-jump', 'up', jump); bindBtn('btn-atk', 'attack', attack);
 
-                // Move X e checa colisões horizontais (simples, focando no chão)
-                this.x += this.vx * dt;
-                
-                // Move Y e checa colisões verticais
-                this.y += this.vy * dt;
-                this.grounded = false;
-
-                for (let plat of platforms) {
-                    // Colisão de caixa (AABB) simples com plataformas
-                    if (this.x < plat.x + plat.w &&
-                        this.x + this.width > plat.x &&
-                        this.y < plat.y + plat.h &&
-                        this.y + this.height > plat.y) {
-                        
-                        // Checa se estava caindo
-                        if (this.vy > 0 && (this.y + this.height - this.vy * dt) <= plat.y + 5) {
-                            this.grounded = true;
-                            this.vy = 0;
-                            this.y = plat.y - this.height;
-                        }
-                        // Neste estilo de jogo, ignoramos colisão de lado/teto para suavidade,
-                        // a menos que bata de cara na plataforma e esteja abaixo dela
-                        else if (this.vx > 0 && this.x + this.width > plat.x && this.y + this.height > plat.y + 10) {
-                            this.x = plat.x - this.width;
-                            this.vx = 0;
-                        }
-                    }
-                }
-            }
-
-            checkAttackHits(enemies) {
-                // Define a caixa de colisão do ataque (Hitbox)
-                let hitX = this.facingRight ? this.x + this.width : this.x - this.attackRange;
-                let hitY = this.y;
-                let hitW = this.attackRange;
-                let hitH = this.height;
-
-                for (let i = enemies.length - 1; i >= 0; i--) {
-                    let enemy = enemies[i];
-                    if (hitX < enemy.x + enemy.w &&
-                        hitX + hitW > enemy.x &&
-                        hitY < enemy.y + enemy.h &&
-                        hitY + hitH > enemy.y) {
-                        // Inimigo atingido!
-                        enemies.splice(i, 1);
-                        audio.enemyDeath();
-                        
-                        // Bônus: cria pequenas partículas no local (simplificado desenhando um flash rápido)
-                        ctx.fillStyle = '#fff';
-                        ctx.fillRect(enemy.x, enemy.y, enemy.w, enemy.h);
-                    }
-                }
-            }
-
-            takeDamage() {
-                if (this.invulnerableTimer > 0) return;
-                this.health--;
-                this.invulnerableTimer = 1.5; // 1.5 segundos de invulnerabilidade
-                this.vy = -300; // Knockback pra cima
-                this.vx = this.facingRight ? -200 : 200; // Knockback pra trás
-                audio.hit();
-                updateHUD();
-                
-                if (this.health <= 0) {
-                    gameOver();
-                }
-            }
-
-            draw(ctx, cameraX) {
-                // Pisca se estiver invulnerável
-                if (this.invulnerableTimer > 0 && Math.floor(Date.now() / 100) % 2 === 0) {
-                    return; 
-                }
-
-                ctx.fillStyle = this.isCrouching ? this.crouchColor : this.color;
-                ctx.fillRect(this.x - cameraX, this.y, this.width, this.height);
-
-                // Desenha olhos para mostrar direção
-                ctx.fillStyle = '#fff';
-                let eyeX = this.facingRight ? this.x - cameraX + 25 : this.x - cameraX + 5;
-                let eyeY = this.y + 10;
-                ctx.fillRect(eyeX, eyeY, 10, 10);
-                
-                ctx.fillStyle = '#000';
-                let pupilX = this.facingRight ? eyeX + 5 : eyeX;
-                ctx.fillRect(pupilX, eyeY + 2, 5, 5);
-
-                // Desenha o ataque (Hitbox)
-                if (this.isAttacking) {
-                    ctx.fillStyle = 'rgba(255, 255, 0, 0.7)'; // Amarelo translúcido
-                    let hitX = this.facingRight ? this.x - cameraX + this.width : this.x - cameraX - this.attackRange;
-                    ctx.fillRect(hitX, this.y, this.attackRange, this.height);
-                    
-                    // Rastro de "corte" branco
-                    ctx.fillStyle = '#fff';
-                    ctx.fillRect(hitX, this.y + this.height/2 - 2, this.attackRange, 4);
-                }
-            }
+    // --- Ações do Jogador ---
+    function jump() {
+        if (game.state !== 'PLAYING') return;
+        if (player.isGrounded || player.jumpsLeft > 0) {
+            player.vy = player.jumpForce;
+            player.isGrounded = false;
+            player.jumpsLeft--;
+            playSound('jump');
+            createParticles(player.x + player.width/2, player.y + player.height, '#fff', 5);
         }
+    }
 
-        class Platform {
-            constructor(x, y, w, h) {
-                this.x = x;
-                this.y = y;
-                this.w = w;
-                this.h = h;
-                // Cores aleatórias para o topo e base da plataforma
-                this.colorTop = '#2ecc71'; // Verde
-                this.colorBase = '#8e44ad'; // Roxo escuro neon
-            }
-            
-            draw(ctx, cameraX) {
-                // Base
-                ctx.fillStyle = this.colorBase;
-                ctx.fillRect(this.x - cameraX, this.y + 10, this.w, this.h - 10);
-                // Topo (Grama/Luz neon)
-                ctx.fillStyle = this.colorTop;
-                ctx.fillRect(this.x - cameraX, this.y, this.w, 10);
-            }
-        }
+    function attack() {
+        if (game.state !== 'PLAYING' || player.isAttacking || player.cooldownTimer > 0) return;
+        player.isAttacking = true;
+        player.attackTimer = player.attackDuration;
+        player.hitEnemiesThisAttack.clear(); // Limpa a lista de atingidos deste golpe
+        playSound('attack');
+    }
 
-        class Enemy {
-            constructor(x, y, platform) {
-                this.w = 30;
-                this.h = 30;
-                this.x = x;
-                this.y = y - this.h; // Nasce em cima da plataforma
-                this.platform = platform; // Referência à plataforma em que está
-                this.speed = 100 + Math.random() * 50;
-                this.direction = Math.random() > 0.5 ? 1 : -1; // 1 direita, -1 esquerda
-                this.color = '#ff3333';
-            }
-
-            update(dt) {
-                this.x += this.speed * this.direction * dt;
-
-                // Patrulha: se chegar na borda da plataforma, inverte
-                if (this.x <= this.platform.x) {
-                    this.x = this.platform.x;
-                    this.direction = 1;
-                } else if (this.x + this.w >= this.platform.x + this.platform.w) {
-                    this.x = this.platform.x + this.platform.w - this.w;
-                    this.direction = -1;
-                }
-            }
-
-            draw(ctx, cameraX) {
-                ctx.fillStyle = this.color;
-                ctx.fillRect(this.x - cameraX, this.y, this.w, this.h);
-                
-                // Rosto de bravo
-                ctx.fillStyle = '#000';
-                // Olhos (linhas diagonais)
-                let renderX = this.x - cameraX;
-                ctx.beginPath();
-                ctx.moveTo(renderX + 5, this.y + 5);
-                ctx.lineTo(renderX + 10, this.y + 12);
-                ctx.stroke();
-                
-                ctx.beginPath();
-                ctx.moveTo(renderX + 25, this.y + 5);
-                ctx.lineTo(renderX + 20, this.y + 12);
-                ctx.stroke();
-                
-                // Boca denteada (simplificada como retângulo)
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(renderX + 8, this.y + 20, 14, 5);
-            }
-        }
-
-        // ==========================================
-        // ESTADO DO JOGO E GERAÇÃO PROCEDURAL
-        // ==========================================
+    function takeDamage() {
+        if (player.invulnerableTimer > 0) return;
+        player.hp--;
+        player.invulnerableTimer = 1.5; // 1.5s de invulnerabilidade
+        playSound('hit');
+        createParticles(player.x + player.width/2, player.y + player.height/2, '#f00', 15);
         
-        let player;
-        let platforms = [];
-        let enemies = [];
+        if (player.hp <= 0) gameOver();
+        updateHUD();
+    }
+
+    // --- Geração de Mundo Procedural ---
+    function spawnPlatform(xOffset) {
+        let lastPlat = platforms.length > 0 ? platforms[platforms.length - 1] : { x: 0, y: 300, width: 800 };
         
-        let cameraX = 0;
-        let nextPlatformX = 0;
-        let lastTime = 0;
-        let isGameOver = false;
-        let gameRunning = false;
-        let distanceScore = 0;
-        let maxDistance = 0;
+        // Cálculos para saltos justos
+        let minGapX = 50;
+        let maxGapX = (player.speed * (Math.abs(player.jumpForce) / player.gravity)) * 1.5; 
+        let gapX = Math.random() * (maxGapX - minGapX) + minGapX;
+        
+        let gapY = (Math.random() - 0.4) * 120; // Sobe ou desce
+        let newX = lastPlat.x + lastPlat.width + gapX;
+        let newY = Math.min(Math.max(lastPlat.y + gapY, 150), canvas.height - 50); // Limites de tela
+        let newWidth = Math.random() * 200 + 150;
 
-        function initGame() {
-            player = new Player();
-            platforms = [];
-            enemies = [];
-            cameraX = 0;
-            nextPlatformX = 0;
-            distanceScore = 0;
-            maxDistance = 0;
-            isGameOver = false;
+        let plat = { x: newX, y: newY, width: newWidth, height: 20 };
+        platforms.push(plat);
 
-            // Cria chão inicial seguro
-            platforms.push(new Platform(0, GAME_HEIGHT - 100, 800, GAME_HEIGHT));
-            nextPlatformX = 800;
-            
-            updateHUD();
-            audio.init();
-            audio.startBGM();
-        }
-
-        function generateWorld() {
-            // Gera plataformas à frente da câmera para criar a ilusão de infinito
-            let rightEdge = cameraX + GAME_WIDTH + 500; // Gera 500px à frente
-
-            while (nextPlatformX < rightEdge) {
-                // Gap (buraco) aleatório entre plataformas
-                let gap = 50 + Math.random() * 200; 
-                
-                // Largura aleatória da nova plataforma
-                let pWidth = 200 + Math.random() * 400;
-                
-                // Altura (Y) aleatória, limitando para não ser impossível pular
-                let minY = GAME_HEIGHT - 300;
-                let maxY = GAME_HEIGHT - 50;
-                let pY = GAME_HEIGHT - 150 + (Math.random() * 200 - 100); 
-                pY = Math.max(minY, Math.min(maxY, pY));
-
-                let newPlatform = new Platform(nextPlatformX + gap, pY, pWidth, GAME_HEIGHT);
-                platforms.push(newPlatform);
-                
-                // Chance de nascer um inimigo (60%)
-                if (Math.random() > 0.4) {
-                    let enemyX = newPlatform.x + Math.random() * (newPlatform.w - 30);
-                    enemies.push(new Enemy(enemyX, newPlatform.y, newPlatform));
-                }
-
-                nextPlatformX += gap + pWidth;
-            }
-
-            // Limpa plataformas e inimigos antigos que ficaram para trás da câmera
-            platforms = platforms.filter(p => p.x + p.w > cameraX - 200);
-            enemies = enemies.filter(e => e.x + e.w > cameraX - 200);
-        }
-
-        // ==========================================
-        // LOOP PRINCIPAL DO JOGO
-        // ==========================================
-
-        function update(dt) {
-            if (isGameOver || !gameRunning) return;
-
-            // Força limite do dt para evitar problemas se a aba ficar inativa
-            if (dt > 0.1) dt = 0.1; 
-
-            player.update(dt, platforms, enemies);
-            
-            // Atualiza Inimigos
-            for (let enemy of enemies) {
-                enemy.update(dt);
-            }
-
-            // Checa Colisão Player x Enemy
-            if (player.invulnerableTimer <= 0) {
-                for (let enemy of enemies) {
-                    // hitbox um pouco menor que o visual para ser justo
-                    let px = player.x + 5, py = player.y + 5, pw = player.width - 10, ph = player.height - 10;
-                    let ex = enemy.x + 5, ey = enemy.y + 5, ew = enemy.w - 10, eh = enemy.h - 10;
-
-                    if (px < ex + ew &&
-                        px + pw > ex &&
-                        py < ey + eh &&
-                        py + ph > ey) {
-                        player.takeDamage();
-                        break; // Toma dano de apenas um por frame
-                    }
-                }
-            }
-
-            // Atualiza Câmera
-            // A câmera segue o jogador na horizontal, mantendo-o a 30% da tela da esquerda
-            let targetCameraX = player.x - GAME_WIDTH * 0.3;
-            // A câmera só anda para a direita no estilo Endless
-            if (targetCameraX > cameraX) {
-                cameraX = targetCameraX;
-            }
-            
-            // Empurra o jogador junto se ele encostar na borda esquerda da tela visível
-            if (player.x < cameraX) {
-                player.x = cameraX;
-                player.vx = 0; // Para de ir pra trás
-            }
-
-            // Gera novos blocos infinitamente
-            generateWorld();
-
-            // Atualiza Pontuação baseada na distância máxima alcançada
-            if (player.x > maxDistance) {
-                maxDistance = player.x;
-                distanceScore = Math.floor(maxDistance / 10);
-                document.getElementById('score').innerText = `Distância: ${distanceScore}m`;
-            }
-
-            // Checa Morte por queda (buraco)
-            if (player.y > GAME_HEIGHT) {
-                gameOver();
-            }
-        }
-
-        function draw() {
-            // Fundo
-            ctx.fillStyle = '#1a1a1a';
-            ctx.fillRect(0, 0, GAME_WIDTH, GAME_HEIGHT);
-
-            // Grade de fundo (efeito parallax simples)
-            ctx.strokeStyle = '#333';
-            ctx.lineWidth = 1;
-            let bgOffsetX = (cameraX * 0.5) % 100; // Parallax
-            for (let i = -100; i < GAME_WIDTH + 100; i += 100) {
-                ctx.beginPath();
-                ctx.moveTo(i - bgOffsetX, 0);
-                ctx.lineTo(i - bgOffsetX, GAME_HEIGHT);
-                ctx.stroke();
-            }
-
-            // Desenha Plataformas
-            for (let p of platforms) {
-                p.draw(ctx, cameraX);
-            }
-
-            // Desenha Inimigos
-            for (let e of enemies) {
-                e.draw(ctx, cameraX);
-            }
-
-            // Desenha Player
-            if (gameRunning) {
-                player.draw(ctx, cameraX);
-            }
-        }
-
-        function gameLoop(timestamp) {
-            let dt = (timestamp - lastTime) / 1000;
-            lastTime = timestamp;
-
-            update(dt);
-            draw();
-
-            requestAnimationFrame(gameLoop);
-        }
-
-        // ==========================================
-        // UI E CONTROLE DE TELAS
-        // ==========================================
-
-        function updateHUD() {
-            const hearts = document.querySelectorAll('.heart');
-            hearts.forEach((h, index) => {
-                if (index < player.health) {
-                    h.classList.remove('empty');
-                } else {
-                    h.classList.add('empty');
-                }
+        // Chance de Spawn
+        if (Math.random() > 0.3) {
+            enemies.push({
+                x: newX + newWidth / 2, y: newY - 40, width: 30, height: 40,
+                speed: 50, patrolStart: newX, patrolEnd: newX + newWidth, dir: 1, hp: 1
             });
         }
-
-        function gameOver() {
-            isGameOver = true;
-            gameRunning = false;
-            audio.stopBGM();
-            
-            // Toca vários sons dissonantes para morte
-            audio.playTone(150, 'sawtooth', 0.5, 0.2);
-            setTimeout(() => audio.playTone(100, 'square', 0.8, 0.2), 200);
-
-            document.getElementById('hud').style.display = 'none';
-            document.getElementById('finalScore').innerText = `Distância Alcançada: ${distanceScore}m`;
-            document.getElementById('gameOverScreen').classList.remove('hidden');
+        
+        // Cristais flutuantes
+        if (Math.random() > 0.4) {
+            crystals.push({ x: newX + newWidth / 2, y: newY - 80 - Math.random() * 50, width: 10, height: 15, collected: false });
         }
+    }
 
-        function startGame() {
-            document.getElementById('startScreen').classList.add('hidden');
-            document.getElementById('gameOverScreen').classList.add('hidden');
-            document.getElementById('hud').style.display = 'block';
-            initGame();
-            gameRunning = true;
-            lastTime = performance.now();
+    function createParticles(x, y, color, count) {
+        for(let i=0; i<count; i++) {
+            particles.push({
+                x: x, y: y, size: Math.random() * 4 + 2, color: color,
+                vx: (Math.random() - 0.5) * 200, vy: (Math.random() - 0.5) * 200,
+                life: 1.0
+            });
         }
+    }
 
-        // Botoes
-        document.getElementById('startBtn').addEventListener('click', startGame);
-        document.getElementById('restartBtn').addEventListener('click', startGame);
+    // --- Atualização Lógica (Loop) ---
+    function update(dt) {
+        if (game.state !== 'PLAYING') return;
 
-        // Permite reiniciar com botão R
-        window.addEventListener('keydown', (e) => {
-            if (isGameOver && (e.code === 'KeyR' || e.code === 'Enter')) {
-                startGame();
+        // Gravidade e Timers
+        player.vy += player.gravity * dt;
+        if (player.invulnerableTimer > 0) player.invulnerableTimer -= dt;
+        if (player.attackTimer > 0) {
+            player.attackTimer -= dt;
+            if (player.attackTimer <= 0) {
+                player.isAttacking = false;
+                player.cooldownTimer = player.attackCooldown;
             }
-        });
+        }
+        if (player.cooldownTimer > 0) player.cooldownTimer -= dt;
 
-        // Inicia loop visual (menus parados)
-        requestAnimationFrame((timestamp) => {
-            lastTime = timestamp;
-            draw(); // Desenha tela preta inicial
-            requestAnimationFrame(gameLoop);
-        });
+        // Movimento X (O jogador controla a corrida)
+        player.isCrouching = keys.down && player.isGrounded;
+        let currentSpeed = player.isCrouching ? player.speed * 0.5 : player.speed;
+        
+        if (keys.right) { player.vx = currentSpeed; }
+        else if (keys.left) { player.vx = -currentSpeed; }
+        else { player.vx = 0; } // Para de mover se soltar as teclas
 
-    </script>
+        player.x += player.vx * dt;
+        
+        // Atualiza Câmera (Segue o jogador, focado no terço esquerdo)
+        let targetCameraX = player.x - canvas.width * 0.3;
+        if (targetCameraX > game.cameraX) game.cameraX = targetCameraX;
+
+        // Impede jogador de sair pela esquerda da tela da câmera
+        if (player.x < game.cameraX) player.x = game.cameraX;
+
+        // Y Prev e Movimento Y
+        let prevBottom = player.y + player.height;
+        if (player.isCrouching) { player.height = 25; player.y += 25; } // Ajuste visual rápido
+        else { player.height = 50; }
+        
+        player.y += player.vy * dt;
+        player.isGrounded = false;
+
+        // Limpa o mundo antigo e gera o novo
+        platforms = platforms.filter(p => p.x + p.width > game.cameraX - 200);
+        while (platforms.length < 5 || platforms[platforms.length-1].x < game.cameraX + canvas.width * 2) {
+            spawnPlatform();
+        }
+
+        // Colisões com Plataformas
+        for (let p of platforms) {
+            // Colisão AABB simples
+            if (player.x < p.x + p.width && player.x + player.width > p.x &&
+                player.y < p.y + p.height && player.y + player.height > p.y) {
+                
+                // Só colide por cima se estava caindo e acima da plataforma no frame anterior
+                if (player.vy > 0 && prevBottom <= p.y + 10) {
+                    player.y = p.y - player.height;
+                    player.vy = 0;
+                    player.isGrounded = true;
+                    player.jumpsLeft = player.maxJumps;
+                } else if (player.vy < 0) { // Bateu a cabeça
+                    player.vy = 0;
+                    player.y = p.y + p.height;
+                } else { // Colisão lateral empurra pra trás
+                    player.x -= player.vx * dt;
+                }
+            }
+        }
+
+        // Morte por Queda
+        if (player.y > canvas.height + 100) gameOver();
+
+        // Caixa de Ataque
+        let atkBox = null;
+        if (player.isAttacking) {
+            let reach = 40 * player.attackRangeMult;
+            atkBox = { x: player.x + player.width, y: player.y, width: reach, height: player.height };
+        }
+
+        // Atualiza Inimigos
+        for (let i = enemies.length - 1; i >= 0; i--) {
+            let e = enemies[i];
+            if (e.x < game.cameraX - 200) { enemies.splice(i, 1); continue; }
+
+            // Patrulha
+            e.x += e.speed * e.dir * dt;
+            if (e.x > e.patrolEnd) { e.x = e.patrolEnd; e.dir = -1; }
+            if (e.x < e.patrolStart) { e.x = e.patrolStart; e.dir = 1; }
+
+            // Verifica hit do jogador no inimigo
+            if (atkBox && atkBox.x < e.x + e.width && atkBox.x + atkBox.width > e.x &&
+                atkBox.y < e.y + e.height && atkBox.y + atkBox.height > e.y) {
+                
+                if (!player.hitEnemiesThisAttack.has(e)) {
+                    player.hitEnemiesThisAttack.add(e);
+                    createParticles(e.x + e.width/2, e.y + e.height/2, '#0ff', 10);
+                    playSound('hit');
+                    enemies.splice(i, 1);
+                    game.crystals += 2; // Bônus por kill
+                    continue;
+                }
+            }
+
+            // Dano no Jogador
+            if (player.x < e.x + e.width && player.x + player.width > e.x &&
+                player.y < e.y + e.height && player.y + player.height > e.y) {
+                takeDamage();
+            }
+        }
+
+        // Atualiza Cristais (Ímã + Coleta)
+        for (let i = crystals.length - 1; i >= 0; i--) {
+            let c = crystals[i];
+            if (c.x < game.cameraX - 100) { crystals.splice(i, 1); continue; }
+
+            // Lógica do Ímã
+            if (player.magnetRange > 0) {
+                let dx = (player.x + player.width/2) - (c.x + c.width/2);
+                let dy = (player.y + player.height/2) - (c.y + c.height/2);
+                let dist = Math.sqrt(dx*dx + dy*dy);
+                if (dist < player.magnetRange) {
+                    c.x += (dx / dist) * 300 * dt;
+                    c.y += (dy / dist) * 300 * dt;
+                }
+            }
+
+            if (player.x < c.x + c.width && player.x + player.width > c.x &&
+                player.y < c.y + c.height && player.y + player.height > c.y) {
+                game.crystals++;
+                playSound('crystal');
+                createParticles(c.x, c.y, '#0ff', 5);
+                crystals.splice(i, 1);
+            }
+        }
+
+        // Partículas
+        for (let i = particles.length - 1; i >= 0; i--) {
+            let p = particles[i];
+            p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+            if (p.life <= 0) particles.splice(i, 1);
+        }
+
+        // Progresso e Upgrades
+        game.distance = Math.floor(player.x / 50); // Ajuste de escala da métrica
+        if (game.distance >= game.nextUpgradeDist) {
+            game.nextUpgradeDist += 500;
+            triggerUpgradeMenu();
+        }
+
+        updateHUD();
+    }
+
+    // --- Renderização (Draw) ---
+    function draw() {
+        // Limpa a tela (Efeito de rastro)
+        ctx.fillStyle = 'rgba(5, 5, 16, 0.4)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+        ctx.save();
+        ctx.translate(-game.cameraX, 0);
+
+        // Grade de Fundo Parallax
+        ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+        ctx.lineWidth = 1;
+        let bgOffset = game.cameraX * 0.5;
+        ctx.beginPath();
+        for(let i=0; i<canvas.width*2; i+=50) {
+            let x = (i + Math.floor(game.cameraX/50)*50) - bgOffset%50;
+            ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height);
+        }
+        ctx.stroke();
+
+        // Plataformas (Estilo Neon)
+        for (let p of platforms) {
+            ctx.fillStyle = '#111'; ctx.fillRect(p.x, p.y, p.width, p.height);
+            ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.width, p.height);
+            ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
+            ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.width, p.y); ctx.stroke();
+            ctx.shadowBlur = 0;
+        }
+
+        // Cristais
+        ctx.fillStyle = '#0ff'; ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
+        for (let c of crystals) {
+            ctx.beginPath();
+            ctx.moveTo(c.x + c.width/2, c.y); ctx.lineTo(c.x + c.width, c.y + c.height/2);
+            ctx.lineTo(c.x + c.width/2, c.y + c.height); ctx.lineTo(c.x, c.y + c.height/2);
+            ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+
+        // Inimigos
+        ctx.fillStyle = '#f00'; ctx.shadowBlur = 10; ctx.shadowColor = '#f00';
+        for (let e of enemies) {
+            ctx.fillRect(e.x, e.y, e.width, e.height);
+            // Olho do inimigo (direção)
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(e.x + (e.dir>0 ? 20 : 5), e.y + 10, 5, 5);
+            ctx.fillStyle = '#f00';
+        }
+        ctx.shadowBlur = 0;
+
+        // Partículas
+        for (let p of particles) {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = Math.max(0, p.life);
+            ctx.fillRect(p.x, p.y, p.size, p.size);
+            ctx.globalAlpha = 1.0;
+        }
+
+        // Jogador
+        if (player.invulnerableTimer <= 0 || Math.floor(Date.now() / 100) % 2 === 0) { // Efeito piscar
+            ctx.fillStyle = '#f0f'; ctx.shadowBlur = 15; ctx.shadowColor = '#f0f';
+            ctx.fillRect(player.x, player.y, player.width, player.height);
+            ctx.shadowBlur = 0;
+
+            // Arma/Ataque
+            if (player.isAttacking) {
+                let reach = 40 * player.attackRangeMult;
+                ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
+                ctx.fillRect(player.x + player.width, player.y + 10, reach, 10);
+            }
+        }
+
+        ctx.restore();
+    }
+
+    // --- Loop Principal ---
+    function gameLoop(timestamp) {
+        if (!game.lastTime) game.lastTime = timestamp;
+        let dt = (timestamp - game.lastTime) / 1000;
+        game.lastTime = timestamp;
+        if (dt > 0.1) dt = 0.1; // Previne saltos enormes se a aba ficar inativa
+
+        update(dt);
+        draw();
+        requestAnimationFrame(gameLoop);
+    }
+
+    // --- Gerenciamento de Interface e Estado ---
+    function startGame() {
+        document.getElementById('start-menu').classList.remove('active');
+        document.getElementById('game-over-menu').classList.remove('active');
+        
+        // Reset Variáveis
+        player.x = 100; player.y = 100; player.vy = 0; player.hp = player.maxHp;
+        player.maxJumps = 1; player.attackRangeMult = 1; player.magnetRange = 0; player.speed = 250;
+        
+        platforms = []; enemies = []; crystals = []; particles = [];
+        game.cameraX = 0; game.distance = 0; game.crystals = 0; game.nextUpgradeDist = 500;
+        
+        platforms.push({ x: 50, y: 300, width: 800, height: 20 }); // Plataforma inicial garantida
+
+        if(audioCtx.state === 'suspended') audioCtx.resume();
+        game.state = 'PLAYING';
+        game.lastTime = performance.now();
+    }
+
+    function togglePause() {
+        if (game.state === 'PLAYING') {
+            game.state = 'PAUSED';
+            document.getElementById('pause-menu').classList.add('active');
+        } else if (game.state === 'PAUSED') {
+            document.getElementById('pause-menu').classList.remove('active');
+            game.state = 'PLAYING';
+            game.lastTime = performance.now();
+        }
+    }
+
+    function gameOver() {
+        game.state = 'GAMEOVER';
+        playSound('hit');
+        
+        // Salva Score
+        if (game.distance > game.highScore) {
+            game.highScore = game.distance;
+            localStorage.setItem('neonHighScore', game.highScore);
+        }
+        game.totalCrystals += game.crystals;
+        localStorage.setItem('neonTotalCrystals', game.totalCrystals);
+
+        document.getElementById('finalScore').innerText = game.distance;
+        document.getElementById('game-over-menu').classList.add('active');
+    }
+
+    function resetGame() {
+        startGame();
+    }
+
+    function updateHUD() {
+        document.getElementById('scoreDisplay').innerText = `Distância: ${game.distance}m`;
+        document.getElementById('crystalDisplay').innerText = `Cristais: ${game.crystals}`;
+        document.getElementById('highScoreDisplay').innerText = `Recorde: ${game.highScore}m`;
+        document.getElementById('hpDisplay').innerText = `Vida: ${'❤️'.repeat(player.hp)}`;
+    }
+
+    // --- Sistema Roguelite (Upgrades) ---
+    function triggerUpgradeMenu() {
+        game.state = 'UPGRADE';
+        keys.right = false; keys.left = false; // Solta teclas
+        
+        const container = document.getElementById('upgrade-cards');
+        container.innerHTML = '';
+        
+        // Pega 3 opções aleatórias
+        let shuffled = upgrades.sort(() => 0.5 - Math.random());
+        let choices = shuffled.slice(0, 3);
+        
+        choices.forEach(upg => {
+            let card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `<h3>${upg.name}</h3><p>${upg.desc}</p>`;
+            card.onclick = () => {
+                upg.apply();
+                document.getElementById('upgrade-menu').classList.remove('active');
+                game.state = 'PLAYING';
+                game.lastTime = performance.now();
+            };
+            container.appendChild(card);
+        });
+        
+        document.getElementById('upgrade-menu').classList.add('active');
+    }
+
+    // Inicia Loop de Renderização
+    requestAnimationFrame(gameLoop);
+</script>
 </body>
 </html>
