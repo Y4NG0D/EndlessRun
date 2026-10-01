@@ -241,7 +241,7 @@
         x: 100, y: 100, width: 30, height: 50, normalHeight: 50, crouchHeight: 25,
         vx: 0, vy: 0, speed: 250, jumpForce: -550, gravity: 1200,
         hp: 3, maxHp: 3,
-        isGrounded: false, isCrouching: false, facingRight: true,
+        isGrounded: false, isCrouching: false, facingRight: true, trail: [],
         
         // Combate
         isAttacking: false, attackTimer: 0, attackDuration: 0.25,
@@ -391,13 +391,17 @@
         }
         if (player.cooldownTimer > 0) player.cooldownTimer -= dt;
 
-        // Movimento X (O jogador controla a corrida)
+        // Movimento X e Rastro (O jogador controla a corrida)
         player.isCrouching = keys.down && player.isGrounded;
         let currentSpeed = player.isCrouching ? player.speed * 0.5 : player.speed;
         
-        if (keys.right) { player.vx = currentSpeed; }
-        else if (keys.left) { player.vx = -currentSpeed; }
+        if (keys.right) { player.vx = currentSpeed; player.facingRight = true; }
+        else if (keys.left) { player.vx = -currentSpeed; player.facingRight = false; }
         else { player.vx = 0; } // Para de mover se soltar as teclas
+        
+        // Atualiza Rastro (Ghost Trail)
+        player.trail.unshift({x: player.x, y: player.y, crouch: player.isCrouching});
+        if(player.trail.length > 8) player.trail.pop(); // Limite do rastro
 
         player.x += player.vx * dt;
         
@@ -530,9 +534,11 @@
         updateHUD();
     }
 
-    // --- Renderização (Draw) ---
+    // --- Renderização (Draw) - Totalmente Renovada Visualmente ---
     function draw() {
-        // Limpa a tela (Efeito de rastro)
+        let time = Date.now() / 1000;
+        
+        // Limpa a tela (Efeito de rastro leve do fundo)
         ctx.fillStyle = 'rgba(5, 5, 16, 0.4)';
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
@@ -559,46 +565,159 @@
             ctx.shadowBlur = 0;
         }
 
-        // Cristais
-        ctx.fillStyle = '#0ff'; ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
+        // Cristais Melhorados (Flutuantes e Giratórios)
+        ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
         for (let c of crystals) {
+            ctx.save();
+            let hoverC = Math.sin((time * 4) + c.x) * 3;
+            ctx.translate(c.x + c.width/2, c.y + c.height/2 + hoverC);
+            ctx.rotate(time * 2);
+            
+            ctx.fillStyle = '#0ff';
             ctx.beginPath();
-            ctx.moveTo(c.x + c.width/2, c.y); ctx.lineTo(c.x + c.width, c.y + c.height/2);
-            ctx.lineTo(c.x + c.width/2, c.y + c.height); ctx.lineTo(c.x, c.y + c.height/2);
+            ctx.moveTo(0, -c.height/2); ctx.lineTo(c.width/2, 0);
+            ctx.lineTo(0, c.height/2);  ctx.lineTo(-c.width/2, 0);
             ctx.fill();
-        }
-        ctx.shadowBlur = 0;
-
-        // Inimigos
-        ctx.fillStyle = '#f00'; ctx.shadowBlur = 10; ctx.shadowColor = '#f00';
-        for (let e of enemies) {
-            ctx.fillRect(e.x, e.y, e.width, e.height);
-            // Olho do inimigo (direção)
+            
             ctx.fillStyle = '#fff';
-            ctx.fillRect(e.x + (e.dir>0 ? 20 : 5), e.y + 10, 5, 5);
-            ctx.fillStyle = '#f00';
+            ctx.beginPath();
+            ctx.arc(0, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
         }
         ctx.shadowBlur = 0;
 
-        // Partículas
+        // Inimigos Drones Cyberpunk Animados
+        for (let e of enemies) {
+            ctx.save();
+            let hover = Math.sin((time * 5) + e.x) * 4; // Efeito de flutuação
+            ctx.translate(e.x + e.width/2, e.y + e.height/2 + hover);
+            if (e.dir < 0) ctx.scale(-1, 1);
+
+            // Chassi do drone
+            ctx.beginPath();
+            ctx.moveTo(0, -e.height/2);
+            ctx.lineTo(e.width/2, -e.height/4);
+            ctx.lineTo(e.width/2, e.height/4);
+            ctx.lineTo(0, e.height/2);
+            ctx.lineTo(-e.width/2, e.height/4);
+            ctx.lineTo(-e.width/2, -e.height/4);
+            ctx.closePath();
+            
+            ctx.fillStyle = '#111'; ctx.fill();
+            ctx.shadowBlur = 10; ctx.shadowColor = '#f00';
+            ctx.strokeStyle = '#f00'; ctx.lineWidth = 2; ctx.stroke();
+            
+            // Olho pulsante do drone
+            let pulse = (Math.sin(time * 10) + 1) / 2; // 0 a 1
+            ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + pulse * 0.5})`;
+            ctx.beginPath(); ctx.arc(e.width/4, 0, 3 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Propulsor (Chamas em baixo)
+            ctx.fillStyle = '#f80';
+            ctx.beginPath();
+            ctx.moveTo(-e.width/4, e.height/2); ctx.lineTo(e.width/4, e.height/2);
+            ctx.lineTo(0, e.height/2 + 8 + Math.random() * 8); // Tremulação
+            ctx.closePath(); ctx.fill();
+
+            ctx.restore();
+        }
+
+        // Partículas (Brilho dinâmico)
         for (let p of particles) {
             ctx.fillStyle = p.color;
+            ctx.shadowBlur = 5; ctx.shadowColor = p.color;
             ctx.globalAlpha = Math.max(0, p.life);
             ctx.fillRect(p.x, p.y, p.size, p.size);
             ctx.globalAlpha = 1.0;
         }
+        ctx.shadowBlur = 0;
 
-        // Jogador
-        if (player.invulnerableTimer <= 0 || Math.floor(Date.now() / 100) % 2 === 0) { // Efeito piscar
-            ctx.fillStyle = '#f0f'; ctx.shadowBlur = 15; ctx.shadowColor = '#f0f';
-            ctx.fillRect(player.x, player.y, player.width, player.height);
+        // Protagonista Ninja Cibernético
+        if (player.invulnerableTimer <= 0 || Math.floor(Date.now() / 100) % 2 === 0) { 
+            
+            // Desenha Rastro de Movimento (Trail)
+            let isMoving = Math.abs(player.vx) > 0;
+            if (isMoving || !player.isGrounded) {
+                for(let i=0; i<player.trail.length; i++) {
+                    let pt = player.trail[i];
+                    let alpha = (1 - (i/player.trail.length)) * 0.4;
+                    ctx.fillStyle = `rgba(255, 0, 255, ${alpha})`;
+                    
+                    ctx.save();
+                    ctx.translate(pt.x + player.width/2, pt.y + (pt.crouch?25:50)/2);
+                    if (!player.facingRight) ctx.scale(-1, 1);
+                    // Sombra da forma base do corpo
+                    ctx.beginPath();
+                    ctx.moveTo(-10, -(pt.crouch?25:50)/2); ctx.lineTo(10, -(pt.crouch?25:50)/2);
+                    ctx.lineTo(15, -5); ctx.lineTo(10, (pt.crouch?25:50)/2);
+                    ctx.lineTo(-10, (pt.crouch?25:50)/2); ctx.lineTo(-15, -5);
+                    ctx.fill();
+                    ctx.restore();
+                }
+            }
+
+            ctx.save();
+            let bobY = (player.isGrounded && isMoving) ? Math.sin(time * 20) * 3 : (player.isGrounded ? Math.sin(time * 5) * 1.5 : 0);
+            ctx.translate(player.x + player.width/2, player.y + player.height/2 + bobY);
+            if (!player.facingRight) ctx.scale(-1, 1); // Vira o personagem fisicamente
+
+            // Forma Corpo do Protagonista (Substituindo o Retângulo)
+            ctx.beginPath();
+            ctx.moveTo(-10, -player.height/2); // Cabeça esq
+            ctx.lineTo(10, -player.height/2);  // Cabeça dir
+            ctx.lineTo(15, -10);               // Ombros/Costas
+            ctx.lineTo(10, player.height/2);   // Pé dir
+            ctx.lineTo(-10, player.height/2);  // Pé esq
+            ctx.lineTo(-15, -10);              // Costas esq
+            ctx.closePath();
+            
+            ctx.fillStyle = '#1a0033'; ctx.fill(); // Traje Escuro
+            ctx.shadowBlur = 10; ctx.shadowColor = '#f0f';
+            ctx.strokeStyle = '#f0f'; ctx.lineWidth = 2; ctx.stroke(); // Borda Neon
             ctx.shadowBlur = 0;
 
-            // Arma/Ataque
+            // Visor Óptico
+            ctx.fillStyle = '#0ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
+            if (player.isCrouching) { ctx.fillRect(2, -player.height/2 + 3, 10, 4); } 
+            else { ctx.fillRect(5, -player.height/2 + 8, 12, 5); }
+            ctx.shadowBlur = 0;
+
+            // Cachecol/Echarpe de Energia (Física simulada)
+            ctx.beginPath();
+            ctx.moveTo(-10, -player.height/2 + 10); // Amarrado no pescoço
+            let scarfSwell = Math.sin(time * 12) * 5;
+            let scarfLen = isMoving ? 25 : 12; // Estica mais quando corre
+            ctx.quadraticCurveTo(-15 - scarfLen/2, -player.height/2 + 5 - scarfSwell, -10 - scarfLen, -player.height/2 + 15 + scarfSwell);
+            ctx.strokeStyle = '#f0f'; ctx.lineWidth = 3;
+            ctx.stroke();
+            ctx.restore();
+
+            // Animação de Corte de Ataque (Slash Fluido)
             if (player.isAttacking) {
+                ctx.save();
                 let reach = 40 * player.attackRangeMult;
-                ctx.fillStyle = 'rgba(0, 255, 255, 0.8)';
-                ctx.fillRect(player.facingRight ? player.x + player.width : player.x - reach, player.y + 10, reach, 10);
+                let atkProgress = 1 - (player.attackTimer / player.attackDuration); // Vai de 0 a 1
+                
+                ctx.translate(player.facingRight ? player.x + player.width : player.x, player.y + player.height/2);
+                if (!player.facingRight) ctx.scale(-1, 1);
+                
+                // Arco do Golpe
+                ctx.beginPath();
+                ctx.moveTo(-10, -player.height/2 - 10);
+                ctx.quadraticCurveTo(reach + 10, -player.height/2, reach, player.height/2 + 10);
+                
+                ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
+                ctx.strokeStyle = '#0ff';
+                // Espessura do golpe aumenta e depois diminui (Fading)
+                ctx.lineWidth = 6 * Math.sin(atkProgress * Math.PI);
+                ctx.stroke();
+
+                // Faisca na ponta da espada
+                ctx.fillStyle = '#fff';
+                ctx.fillRect(reach * atkProgress, -5, 15, 3);
+                ctx.restore();
             }
         }
 
@@ -626,6 +745,7 @@
         player.x = 100; player.y = 100; player.vy = 0; player.hp = player.maxHp;
         player.maxJumps = 1; player.attackRangeMult = 1; player.magnetRange = 0; player.speed = 250;
         player.height = player.normalHeight;
+        player.trail = []; // Zera rastro
         
         platforms = []; enemies = []; crystals = []; particles = [];
         game.cameraX = 0; game.distance = 0; game.crystals = 0; game.nextUpgradeDist = 500;
