@@ -20,8 +20,10 @@
         }
 
         canvas {
-            display: block; background: linear-gradient(180deg, #0f0c29 0%, #302b63 50%, #24243e 100%);
-            box-shadow: 0 0 20px #0ff5; max-width: 100%; max-height: 100%;
+            display: block; 
+            box-shadow: 0 0 20px rgba(0, 255, 255, 0.5); 
+            max-width: 100%; max-height: 100%;
+            transition: background 2s ease; /* Transição suave dia/noite */
         }
 
         /* HUD - Informações na tela */
@@ -37,6 +39,22 @@
         .hud-group { display: flex; flex-direction: column; gap: 8px; }
         .text-neon-blue { color: #0ff; text-shadow: 0 0 5px #0ff; }
         .text-neon-pink { color: #f0f; text-shadow: 0 0 5px #f0f; }
+        .text-weapon { color: #0f0; text-shadow: 0 0 5px #0f0; }
+
+        /* Barras de Vida dos Chefes */
+        #boss-ui {
+            position: absolute; top: 50px; left: 50%; transform: translateX(-50%);
+            display: none; flex-direction: column; align-items: center; gap: 5px;
+            z-index: 10; text-shadow: 2px 2px 0px #000;
+        }
+        #boss-hp-bar {
+            width: 300px; height: 10px; background: #333; border: 2px solid #f00;
+            position: relative;
+        }
+        #boss-hp-fill {
+            width: 100%; height: 100%; background: #f00; box-shadow: 0 0 10px #f00;
+            transition: width 0.2s;
+        }
 
         /* Menus sobrepostos */
         .overlay {
@@ -73,7 +91,7 @@
         .card h3 { color: #f0f; font-size: 14px; margin-top: 0;}
         .card p { font-size: 10px; margin-bottom: 0; color: #ccc;}
 
-        /* Controles Mobile (Invisíveis no PC) */
+        /* Controles Mobile */
         #mobile-controls {
             position: absolute; bottom: 20px; left: 0; width: 100%;
             display: none; justify-content: space-between; padding: 0 20px;
@@ -106,6 +124,7 @@
         <div class="hud-group">
             <span id="scoreDisplay">Distância: 0m</span>
             <span id="crystalDisplay" class="text-neon-blue">Cristais: 0</span>
+            <span id="weaponDisplay" class="text-weapon">Arma: Espada (0/25)</span>
         </div>
         <div class="hud-group" style="text-align: right;">
             <span id="highScoreDisplay" class="text-neon-pink">Recorde: 0m</span>
@@ -113,12 +132,18 @@
         </div>
     </div>
 
+    <!-- UI do Chefe -->
+    <div id="boss-ui">
+        <span style="color: #f00;">ALERTA DE CHEFE: O DESTRUIDOR</span>
+        <div id="boss-hp-bar"><div id="boss-hp-fill"></div></div>
+    </div>
+
     <!-- Menus -->
     <div id="start-menu" class="overlay active">
         <h1>NEON RUNNER</h1>
         <p>Setas: mover | Cima: pular | Baixo: agachar<br>Espaço: atacar | Esc: pausar</p>
         <button onclick="startGame()">Iniciar Jogo</button>
-        <p class="menu-hint">Colete cristais, derrote inimigos e escolha upgrades a cada 500m.</p>
+        <p class="menu-hint">Cuidado com lasers aéreos (agache). A cada 25 cristais você ganha uma nova arma.<br>Dia e noite mudam o ambiente a cada 100m. Sobreviva aos Chefes.</p>
     </div>
 
     <div id="pause-menu" class="overlay">
@@ -137,7 +162,7 @@
 
     <div id="upgrade-menu" class="overlay">
         <h1>UPGRADE DISPONÍVEL</h1>
-        <p>Escolha uma melhoria para seus sistemas:</p>
+        <p>Acesse as melhorias de sistema:</p>
         <div id="upgrade-cards">
             <!-- Gerados via JS -->
         </div>
@@ -183,12 +208,15 @@
         } else if (type === 'attack') {
             osc.type = 'square'; osc.frequency.setValueAtTime(400, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
             gain.gain.setValueAtTime(0.1, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1); osc.start(now); osc.stop(now + 0.1);
-        } else if (type === 'crouch') {
-            osc.type = 'triangle'; osc.frequency.setValueAtTime(200, now); osc.frequency.exponentialRampToValueAtTime(100, now + 0.1);
-            gain.gain.setValueAtTime(0.07, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.1); osc.start(now); osc.stop(now + 0.1);
-        } else if (type === 'death') {
-            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(150, now); osc.frequency.exponentialRampToValueAtTime(45, now + 0.45);
-            gain.gain.setValueAtTime(0.12, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.45); osc.start(now); osc.stop(now + 0.45);
+        } else if (type === 'weapon_change') {
+            osc.type = 'triangle'; osc.frequency.setValueAtTime(440, now); osc.frequency.linearRampToValueAtTime(880, now + 0.3);
+            gain.gain.setValueAtTime(0.2, now); gain.gain.linearRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3);
+        } else if (type === 'boss_hit') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(80, now); osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
+            gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3);
+        } else if (type === 'boss_death') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now + 1.0);
+            gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0); osc.start(now); osc.stop(now + 1.0);
         }
     }
 
@@ -228,12 +256,21 @@
     }
 
     // --- Estado do Jogo (Persistência) ---
+    const weaponsList = [
+        { id: 'sword', name: 'Espada', color: '#0ff' },
+        { id: 'bow', name: 'Arco Laser', color: '#0f0' },
+        { id: 'hammer', name: 'Martelo Grav.', color: '#ff0' },
+        { id: 'shield', name: 'Escudo Cinético', color: '#00f' }
+    ];
+
     const game = {
         state: 'START', // START, PLAYING, PAUSED, UPGRADE, GAMEOVER
         lastTime: 0, cameraX: 0, distance: 0, crystals: 0,
         highScore: parseInt(localStorage.getItem('neonHighScore')) || 0,
         totalCrystals: parseInt(localStorage.getItem('neonTotalCrystals')) || 0,
-        nextUpgradeDist: 500, enemiesDefeated: 0, gameOverHandled: false
+        nextUpgradeDist: 500, nextBossDist: 350, enemiesDefeated: 0, 
+        isDay: false, weaponCrystalCounter: 0,
+        activeBoss: null
     };
 
     // --- Entidades ---
@@ -244,9 +281,10 @@
         isGrounded: false, isCrouching: false, facingRight: true, trail: [],
         
         // Combate
+        weapon: weaponsList[0],
         isAttacking: false, attackTimer: 0, attackDuration: 0.25,
-        attackCooldown: 0.1, cooldownTimer: 0,
-        hitEnemiesThisAttack: new Set(), // Garante 1 hit por ataque por inimigo
+        attackCooldown: 0.2, cooldownTimer: 0,
+        hitEnemiesThisAttack: new Set(), // Garante 1 hit por ataque por inimigo (para espadas/escudos)
         invulnerableTimer: 0,
 
         // Atributos de Upgrade
@@ -258,14 +296,16 @@
     let enemies = [];
     let crystals = [];
     let particles = [];
+    let projectiles = [];
+    let obstacles = []; // Lasers aéreos que requerem agachamento
 
     // --- Upgrades (Roguelite) ---
     const upgrades = [
         { id: 'jump', name: 'Pulo Duplo', desc: 'Permite saltar no ar.', apply: () => player.maxJumps = 2 },
-        { id: 'magnet', name: 'Ímã Neon', desc: 'Atrai cristais próximos.', apply: () => player.magnetRange = 150 },
-        { id: 'blade', name: 'Lâmina Longa', desc: 'Dobra o alcance do ataque.', apply: () => player.attackRangeMult = 2 },
+        { id: 'magnet', name: 'Ímã Neon', desc: 'Atrai cristais próximos.', apply: () => player.magnetRange = 250 },
+        { id: 'blade', name: 'Aprimoramento', desc: 'Aumenta área das armas brancas.', apply: () => player.attackRangeMult = 1.5 },
         { id: 'heal', name: 'Nanorreparo', desc: 'Recupera 1 de HP.', apply: () => player.hp = Math.min(player.maxHp, player.hp + 1) },
-        { id: 'speed', name: 'Sobrecarga', desc: 'Aumenta a velocidade.', apply: () => player.speed += 50 }
+        { id: 'speed', name: 'Sobrecarga', desc: 'Aumenta sua mobilidade e pulo.', apply: () => { player.speed += 40; player.jumpForce -= 30; } }
     ];
 
     // --- Controles (Teclado e Toque) ---
@@ -302,6 +342,12 @@
     bindBtn('btn-right', 'right'); bindBtn('btn-left', 'left'); bindBtn('btn-crouch', 'down');
     bindBtn('btn-jump', 'up', jump); bindBtn('btn-atk', 'attack', attack);
 
+    // --- Colisões (AABB Genérico) ---
+    function checkAABB(rect1, rect2) {
+        return (rect1.x < rect2.x + rect2.width && rect1.x + rect1.width > rect2.x &&
+                rect1.y < rect2.y + rect2.height && rect1.y + rect1.height > rect2.y);
+    }
+
     // --- Ações do Jogador ---
     function jump() {
         if (game.state !== 'PLAYING') return;
@@ -318,59 +364,177 @@
         if (game.state !== 'PLAYING' || player.isAttacking || player.cooldownTimer > 0) return;
         player.isAttacking = true;
         player.attackTimer = player.attackDuration;
-        player.hitEnemiesThisAttack.clear(); // Limpa a lista de atingidos deste golpe
+        player.hitEnemiesThisAttack.clear(); // Limpa a lista de atingidos deste golpe (para meele)
         playSound('attack');
+
+        // Disparo de Projéteis baseado na arma
+        if (player.weapon.id === 'bow') {
+            projectiles.push({
+                type: 'arrow',
+                x: player.facingRight ? player.x + player.width : player.x - 20,
+                y: player.y + 15, width: 20, height: 4,
+                vx: player.facingRight ? 600 : -600, vy: 0, life: 1.5
+            });
+        } else if (player.weapon.id === 'hammer') {
+            projectiles.push({
+                type: 'hammer',
+                x: player.x + player.width/2,
+                y: player.y - 10, width: 20, height: 20,
+                vx: player.facingRight ? 350 : -350, vy: -450, life: 3, rot: 0
+            });
+        }
     }
 
-    function takeDamage() {
+    function takeDamage(knockbackX = 0) {
         if (player.invulnerableTimer > 0) return;
         player.hp--;
         player.invulnerableTimer = 1.5; // 1.5s de invulnerabilidade
+        
+        // Tranco visual para trás
+        if (knockbackX !== 0) {
+            player.vx = knockbackX;
+            player.vy = -200; // Pulo de dano
+            player.isGrounded = false;
+        }
+
         playSound('hit');
-        createParticles(player.x + player.width/2, player.y + player.height/2, '#f00', 15);
+        createParticles(player.x + player.width/2, player.y + player.height/2, '#f00', 25);
         
         if (player.hp <= 0) gameOver();
         updateHUD();
     }
 
-    // --- Geração de Mundo Procedural ---
-    function spawnPlatform(xOffset) {
+    function damageEnemy(e, index, knockbackDir = 0) {
+        e.hp--;
+        createParticles(e.x + e.width/2, e.y + e.height/2, e.isBoss ? '#f0f' : '#0ff', e.isBoss ? 40 : 15);
+        
+        if (knockbackDir !== 0) {
+            e.x += knockbackDir * 80; // Tranco do escudo
+            e.y -= 30; // Levanta o inimigo levemente
+        }
+
+        if (e.hp <= 0) {
+            if (e.isBoss) {
+                game.activeBoss = null;
+                playSound('boss_death');
+                document.getElementById('boss-ui').style.display = 'none';
+                // Boss morre solta 10 cristais
+                for(let k=0; k<10; k++){
+                    crystals.push({ x: e.x + Math.random()*100 - 50, y: e.y + Math.random()*100 - 50, width: 10, height: 15 });
+                }
+            } else {
+                playSound('crystal');
+            }
+            enemies.splice(index, 1);
+            game.crystals += e.isBoss ? 15 : 2; // Bônus por kill
+            game.enemiesDefeated++;
+            updateWeaponProgress(e.isBoss ? 5 : 1);
+        } else {
+            playSound(e.isBoss ? 'boss_hit' : 'hit');
+            if (e.isBoss) updateBossUI();
+        }
+    }
+
+    function updateWeaponProgress(amount) {
+        game.weaponCrystalCounter += amount;
+        if (game.weaponCrystalCounter >= 25) {
+            game.weaponCrystalCounter -= 25;
+            // Troca de arma aleatória diferente da atual
+            let filteredWeapons = weaponsList.filter(w => w.id !== player.weapon.id);
+            player.weapon = filteredWeapons[Math.floor(Math.random() * filteredWeapons.length)];
+            playSound('weapon_change');
+            createParticles(player.x + player.width/2, player.y, player.weapon.color, 30);
+        }
+    }
+
+    function updateBossUI() {
+        if (!game.activeBoss) return;
+        const fill = document.getElementById('boss-hp-fill');
+        let percentage = (game.activeBoss.hp / game.activeBoss.maxHp) * 100;
+        fill.style.width = percentage + '%';
+    }
+
+    // --- Geração de Mundo Procedural Expandida ---
+    function spawnPlatform() {
         let lastPlat = platforms.length > 0 ? platforms[platforms.length - 1] : { x: 0, y: 300, width: 800 };
         
-        // Cálculos para saltos justos
-        let minGapX = 50;
-        // Janela de salto aproximada: reduz a chance de gerar buracos impossíveis.
-        let maxGapX = Math.max(95, Math.min(180, player.speed * (Math.abs(player.jumpForce) / player.gravity) * 0.42));
+        // Cálculos para saltos e elevações extremas (Variabilidade de Altura)
+        let minGapX = 60;
+        // Janela de salto ajustada.
+        let maxGapX = Math.max(100, Math.min(220, player.speed * (Math.abs(player.jumpForce) / player.gravity) * 0.45));
         let gapX = Math.random() * (maxGapX - minGapX) + minGapX;
         
-        let gapY = (Math.random() - 0.4) * 120; // Sobe ou desce
+        // Agora as plataformas podem ser bem mais altas ou baixas
+        let gapY = (Math.random() - 0.5) * 200; 
+        
+        // Garante que não crie uma parede intransponível de uma vez
+        if (gapY < -120) gapX = minGapX; // Se for muito alto, deve ser próximo
+        
         let newX = lastPlat.x + lastPlat.width + gapX;
-        let newY = Math.min(Math.max(lastPlat.y + gapY, 150), canvas.height - 50); // Limites de tela
-        let newWidth = Math.random() * 200 + 150;
+        let newY = Math.min(Math.max(lastPlat.y + gapY, 120), canvas.height - 40); // Limites de tela expandidos
+        let newWidth = Math.random() * 250 + 60; // Podem ser plataformas bem curtas agora (60)
+
+        // Evita gerar terreno impossível caso o boss esteja ativo (força terreno liso)
+        if (game.activeBoss) {
+            gapY = (Math.random() - 0.5) * 40;
+            newY = Math.min(Math.max(lastPlat.y + gapY, 200), 350);
+            newWidth = Math.random() * 200 + 200;
+            gapX = Math.random() * 80 + 50;
+            newX = lastPlat.x + lastPlat.width + gapX;
+        }
 
         let plat = { x: newX, y: newY, width: newWidth, height: 20 };
         platforms.push(plat);
 
-        // Chance de Spawn
-        if (Math.random() > 0.3) {
+        // Chance de Inimigo Terrestre (Drone Simples)
+        if (Math.random() > 0.4 && newWidth > 100 && !game.activeBoss) {
             enemies.push({
                 x: newX + newWidth / 2, y: newY - 40, width: 30, height: 40,
-                speed: 50, patrolStart: newX, patrolEnd: newX + newWidth, dir: 1, hp: 1
+                speed: 60, patrolStart: newX, patrolEnd: newX + newWidth, dir: 1, hp: 1, maxHp: 1, isBoss: false
             });
         }
         
-        // Cristais flutuantes
-        if (Math.random() > 0.4) {
-            crystals.push({ x: newX + newWidth / 2, y: newY - 80 - Math.random() * 50, width: 10, height: 15, collected: false });
+        // Obstáculo Aéreo (Laser de Agachamento)
+        if (Math.random() > 0.6 && gapX > 80 && !game.activeBoss) {
+            // Posiciona exatamente na altura em que o jogador toma dano em pé, mas passa livre agachado
+            obstacles.push({
+                x: newX + newWidth / 2, 
+                y: newY - 35, // Altura perigosa para jogador de 50px de altura
+                width: 40, height: 10, speed: -180
+            });
         }
+        
+        // Cristais flutuantes (podem aparecer em sequências)
+        if (Math.random() > 0.3) {
+            let numCrystals = Math.floor(Math.random() * 3) + 1;
+            for (let c=0; c<numCrystals; c++) {
+                crystals.push({ 
+                    x: newX + newWidth / 2 + (c * 20) - ((numCrystals*20)/2), 
+                    y: newY - 80 - Math.random() * 40, 
+                    width: 10, height: 15 
+                });
+            }
+        }
+    }
+
+    function spawnBoss() {
+        let b = {
+            x: game.cameraX + canvas.width + 100,
+            y: 100, width: 100, height: 80,
+            hp: 5, maxHp: 5, speed: 200, dir: -1, isBoss: true
+        };
+        enemies.push(b);
+        game.activeBoss = b;
+        document.getElementById('boss-ui').style.display = 'flex';
+        updateBossUI();
     }
 
     function createParticles(x, y, color, count) {
         for(let i=0; i<count; i++) {
             particles.push({
-                x: x, y: y, size: Math.random() * 4 + 2, color: color,
-                vx: (Math.random() - 0.5) * 200, vy: (Math.random() - 0.5) * 200,
-                life: 1.0
+                x: x, y: y, size: Math.random() * 5 + 2, color: color,
+                vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300,
+                life: 1.0 + Math.random()*0.5
             });
         }
     }
@@ -379,7 +543,11 @@
     function update(dt) {
         if (game.state !== 'PLAYING') return;
 
-        // Gravidade e Timers
+        // Tema de Cenário (Muda a cada 100m)
+        let currentPeriod = Math.floor(game.distance / 100);
+        game.isDay = (currentPeriod % 2 !== 0);
+
+        // Gravidade e Timers do Jogador
         player.vy += player.gravity * dt;
         if (player.invulnerableTimer > 0) player.invulnerableTimer -= dt;
         if (player.attackTimer > 0) {
@@ -397,98 +565,157 @@
         
         if (keys.right) { player.vx = currentSpeed; player.facingRight = true; }
         else if (keys.left) { player.vx = -currentSpeed; player.facingRight = false; }
-        else { player.vx = 0; } // Para de mover se soltar as teclas
+        else { player.vx = 0; }
         
         // Atualiza Rastro (Ghost Trail)
-        player.trail.unshift({x: player.x, y: player.y, crouch: player.isCrouching});
+        player.trail.unshift({x: player.x, y: player.y, crouch: player.isCrouching, color: player.weapon.color});
         if(player.trail.length > 8) player.trail.pop(); // Limite do rastro
 
         player.x += player.vx * dt;
         
-        // Atualiza Câmera (Segue o jogador, focado no terço esquerdo)
+        // Atualiza Câmera
         let targetCameraX = player.x - canvas.width * 0.3;
         if (targetCameraX > game.cameraX) game.cameraX = targetCameraX;
-
-        // Impede jogador de sair pela esquerda da tela da câmera
-        if (player.x < game.cameraX) player.x = game.cameraX;
+        if (player.x < game.cameraX) player.x = game.cameraX; // Prende na borda esquerda
 
         // Y Prev e Movimento Y
         let prevBottom = player.y + player.height;
-        if (player.isCrouching) { player.height = 25; player.y += 25; } // Ajuste visual rápido
-        else { player.height = 50; }
+        // Ajuste fluido de Hitbox para agachar
+        if (player.isCrouching && player.height !== player.crouchHeight) {
+            player.y += (player.normalHeight - player.crouchHeight);
+            player.height = player.crouchHeight;
+        } else if (!player.isCrouching && player.height !== player.normalHeight) {
+            player.y -= (player.normalHeight - player.crouchHeight);
+            player.height = player.normalHeight;
+        }
         
         player.y += player.vy * dt;
         player.isGrounded = false;
 
-        // Limpa o mundo antigo e gera o novo
+        // Limpa e gera mundo
         platforms = platforms.filter(p => p.x + p.width > game.cameraX - 200);
-        while (platforms.length < 5 || platforms[platforms.length-1].x < game.cameraX + canvas.width * 2) {
+        while (platforms.length < 6 || platforms[platforms.length-1].x < game.cameraX + canvas.width * 2) {
             spawnPlatform();
         }
 
         // Colisões com Plataformas
         for (let p of platforms) {
-            // Colisão AABB simples
-            if (player.x < p.x + p.width && player.x + player.width > p.x &&
-                player.y < p.y + p.height && player.y + player.height > p.y) {
-                
-                // Só colide por cima se estava caindo e acima da plataforma no frame anterior
-                if (player.vy > 0 && prevBottom <= p.y + 10) {
+            if (checkAABB(player, p)) {
+                // Colisão de topo
+                if (player.vy > 0 && prevBottom <= p.y + 12) {
                     player.y = p.y - player.height;
                     player.vy = 0;
                     player.isGrounded = true;
                     player.jumpsLeft = player.maxJumps;
-                } else if (player.vy < 0) { // Bateu a cabeça
+                } else if (player.vy < 0 && player.y >= p.y + p.height - 15) { // Bate a cabeça
                     player.vy = 0;
                     player.y = p.y + p.height;
-                } else { // Colisão lateral empurra pra trás
+                } else { // Parede Lateral
                     player.x -= player.vx * dt;
                 }
             }
         }
 
         // Morte por Queda
-        if (player.y > canvas.height + 100) gameOver();
+        if (player.y > canvas.height + 150) gameOver();
 
-        // Caixa de Ataque
+        // ------------------
+        // Caixa de Ataque Corpo a Corpo (Espada / Escudo)
+        // ------------------
         let atkBox = null;
-        if (player.isAttacking) {
-            let reach = 40 * player.attackRangeMult;
+        if (player.isAttacking && (player.weapon.id === 'sword' || player.weapon.id === 'shield')) {
+            let reach = (player.weapon.id === 'shield' ? 30 : 50) * player.attackRangeMult;
             atkBox = {
                 x: player.facingRight ? player.x + player.width : player.x - reach,
                 y: player.y, width: reach, height: player.height
             };
         }
 
-        // Atualiza Inimigos
+        // ------------------
+        // Atualiza Projéteis do Jogador
+        // ------------------
+        for (let i = projectiles.length - 1; i >= 0; i--) {
+            let p = projectiles[i];
+            p.x += p.vx * dt;
+            p.y += p.vy * dt;
+            if (p.type === 'hammer') {
+                p.vy += 900 * dt; // Gravidade própria
+                p.rot += 15 * dt * (p.vx > 0 ? 1 : -1); // Rotação visual
+            }
+            p.life -= dt;
+            
+            // Checa Colisão com Inimigos
+            let hit = false;
+            for (let j = enemies.length - 1; j >= 0; j--) {
+                let e = enemies[j];
+                if (checkAABB(p, e)) {
+                    damageEnemy(e, j);
+                    hit = true;
+                    break;
+                }
+            }
+            if (hit || p.life <= 0 || p.y > canvas.height) {
+                if (p.type === 'hammer') createParticles(p.x, p.y, '#ff0', 8);
+                projectiles.splice(i, 1);
+            }
+        }
+
+        // ------------------
+        // Atualiza Inimigos e Bosses
+        // ------------------
         for (let i = enemies.length - 1; i >= 0; i--) {
             let e = enemies[i];
-            if (e.x < game.cameraX - 200) { enemies.splice(i, 1); continue; }
+            
+            // Remove se ficou pra trás
+            if (!e.isBoss && e.x < game.cameraX - 200) { enemies.splice(i, 1); continue; }
 
-            // Patrulha
-            e.x += e.speed * e.dir * dt;
-            if (e.x > e.patrolEnd) { e.x = e.patrolEnd; e.dir = -1; }
-            if (e.x < e.patrolStart) { e.x = e.patrolStart; e.dir = 1; }
-
-            // Verifica hit do jogador no inimigo
-            if (atkBox && atkBox.x < e.x + e.width && atkBox.x + atkBox.width > e.x &&
-                atkBox.y < e.y + e.height && atkBox.y + atkBox.height > e.y) {
+            // Comportamento
+            if (e.isBoss) {
+                // Chefe voa perseguindo o jogador de cima e dá investidas
+                let hoverY = player.y - 150 + Math.sin(Date.now() / 400) * 100;
+                // Move na direção do jogador suavemente no eixo Y
+                e.y += (hoverY - e.y) * 2 * dt;
                 
+                // Padrão de patrulha ampla acima do jogador
+                e.x += e.speed * e.dir * dt;
+                if (e.x < player.x - 100) e.dir = 1;
+                if (e.x > player.x + 400) e.dir = -1;
+            } else {
+                // Drone comum
+                e.x += e.speed * e.dir * dt;
+                if (e.x > e.patrolEnd) { e.x = e.patrolEnd; e.dir = -1; }
+                if (e.x < e.patrolStart) { e.x = e.patrolStart; e.dir = 1; }
+            }
+
+            // Sofre Dano Melee (Espada/Escudo)
+            if (atkBox && checkAABB(atkBox, e)) {
                 if (!player.hitEnemiesThisAttack.has(e)) {
                     player.hitEnemiesThisAttack.add(e);
-                    createParticles(e.x + e.width/2, e.y + e.height/2, '#0ff', 10);
-                    playSound('crystal');
-                    enemies.splice(i, 1);
-                    game.crystals += 2; // Bônus por kill
-                    game.enemiesDefeated++;
-                    continue;
+                    // O Escudo empurra o inimigo!
+                    let knock = player.weapon.id === 'shield' ? (player.facingRight ? 1 : -1) : 0;
+                    damageEnemy(e, i, knock);
+                    if (e.hp <= 0) continue; // Morreu, sai do loop atual
                 }
             }
 
-            // Dano no Jogador
-            if (player.x < e.x + e.width && player.x + player.width > e.x &&
-                player.y < e.y + e.height && player.y + player.height > e.y) {
-                takeDamage();
+            // Causa Dano no Jogador
+            if (checkAABB(player, e)) {
+                let knock = player.x < e.x + e.width/2 ? -150 : 150;
+                takeDamage(knock);
+            }
+        }
+
+        // ------------------
+        // Atualiza Obstáculos (Lasers - Esquiva com Agachamento)
+        // ------------------
+        for (let i = obstacles.length - 1; i >= 0; i--) {
+            let obs = obstacles[i];
+            obs.x += obs.speed * dt;
+            if (obs.x < game.cameraX - 100) { obstacles.splice(i, 1); continue; }
+
+            if (checkAABB(player, obs)) {
+                takeDamage(-100);
+                obstacles.splice(i, 1);
             }
         }
 
@@ -503,16 +730,16 @@
                 let dy = (player.y + player.height/2) - (c.y + c.height/2);
                 let dist = Math.sqrt(dx*dx + dy*dy);
                 if (dist < player.magnetRange) {
-                    c.x += (dx / dist) * 300 * dt;
-                    c.y += (dy / dist) * 300 * dt;
+                    c.x += (dx / dist) * 400 * dt;
+                    c.y += (dy / dist) * 400 * dt;
                 }
             }
 
-            if (player.x < c.x + c.width && player.x + player.width > c.x &&
-                player.y < c.y + c.height && player.y + player.height > c.y) {
+            if (checkAABB(player, c)) {
                 game.crystals++;
                 playSound('crystal');
                 createParticles(c.x, c.y, '#0ff', 5);
+                updateWeaponProgress(1);
                 crystals.splice(i, 1);
             }
         }
@@ -520,33 +747,51 @@
         // Partículas
         for (let i = particles.length - 1; i >= 0; i--) {
             let p = particles[i];
-            p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt;
+            p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * 1.5;
             if (p.life <= 0) particles.splice(i, 1);
         }
 
-        // Progresso e Upgrades
+        // Progresso e Eventos Especiais (Upgrades e Boss)
         game.distance = Math.floor(player.x / 50); // Ajuste de escala da métrica
+        
+        // Upgrade
         if (game.distance >= game.nextUpgradeDist) {
             game.nextUpgradeDist += 500;
             triggerUpgradeMenu();
+        }
+        
+        // Spawn do Boss
+        if (game.distance >= game.nextBossDist && !game.activeBoss) {
+            game.nextBossDist += 350;
+            spawnBoss();
         }
 
         updateHUD();
     }
 
-    // --- Renderização (Draw) - Totalmente Renovada Visualmente ---
+    // --- Renderização (Draw) ---
     function draw() {
         let time = Date.now() / 1000;
         
-        // Limpa a tela (Efeito de rastro leve do fundo)
-        ctx.fillStyle = 'rgba(5, 5, 16, 0.4)';
+        // Fundo dinâmico Dia/Noite
+        let bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
+        if (game.isDay) {
+            bgGrad.addColorStop(0, '#ff7e5f'); // Pôr-do-sol laranja
+            bgGrad.addColorStop(1, '#feb47b');
+            ctx.fillStyle = bgGrad;
+        } else {
+            bgGrad.addColorStop(0, '#0f0c29'); // Noite Cyber
+            bgGrad.addColorStop(0.5, '#302b63');
+            bgGrad.addColorStop(1, '#24243e');
+            ctx.fillStyle = bgGrad;
+        }
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.save();
         ctx.translate(-game.cameraX, 0);
 
-        // Grade de Fundo Parallax
-        ctx.strokeStyle = 'rgba(0, 255, 255, 0.1)';
+        // Grade Parallax (Altera cor baseado no tema)
+        ctx.strokeStyle = game.isDay ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 255, 255, 0.1)';
         ctx.lineWidth = 1;
         let bgOffset = game.cameraX * 0.5;
         ctx.beginPath();
@@ -556,45 +801,75 @@
         }
         ctx.stroke();
 
-        // Plataformas (Estilo Neon)
+        // Plataformas
         for (let p of platforms) {
-            ctx.fillStyle = '#111'; ctx.fillRect(p.x, p.y, p.width, p.height);
-            ctx.strokeStyle = '#0ff'; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.width, p.height);
-            ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
+            ctx.fillStyle = game.isDay ? '#311' : '#111'; 
+            ctx.fillRect(p.x, p.y, p.width, p.height);
+            let pColor = game.isDay ? '#ff0' : '#0ff'; // Amarelo dia, Azul noite
+            ctx.strokeStyle = pColor; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.width, p.height);
+            ctx.shadowBlur = 10; ctx.shadowColor = pColor;
             ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.width, p.y); ctx.stroke();
             ctx.shadowBlur = 0;
         }
 
-        // Cristais Melhorados (Flutuantes e Giratórios)
+        // Cristais (Flutuantes Giratórios)
         ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
         for (let c of crystals) {
             ctx.save();
             let hoverC = Math.sin((time * 4) + c.x) * 3;
             ctx.translate(c.x + c.width/2, c.y + c.height/2 + hoverC);
             ctx.rotate(time * 2);
-            
             ctx.fillStyle = '#0ff';
             ctx.beginPath();
             ctx.moveTo(0, -c.height/2); ctx.lineTo(c.width/2, 0);
             ctx.lineTo(0, c.height/2);  ctx.lineTo(-c.width/2, 0);
             ctx.fill();
-            
             ctx.fillStyle = '#fff';
-            ctx.beginPath();
-            ctx.arc(0, 0, 2, 0, Math.PI * 2);
-            ctx.fill();
+            ctx.beginPath(); ctx.arc(0, 0, 2, 0, Math.PI * 2); ctx.fill();
             ctx.restore();
         }
         ctx.shadowBlur = 0;
 
-        // Inimigos Drones Cyberpunk Animados
+        // Obstáculos (Lasers)
+        for (let obs of obstacles) {
+            ctx.fillStyle = '#f0f'; ctx.shadowBlur = 15; ctx.shadowColor = '#f0f';
+            ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
+            // Miolo branco
+            ctx.fillStyle = '#fff'; ctx.fillRect(obs.x+5, obs.y+2, obs.width-10, obs.height-4);
+            ctx.shadowBlur = 0;
+        }
+
+        // Projéteis do Jogador
+        for (let p of projectiles) {
+            ctx.save();
+            ctx.translate(p.x, p.y + p.height/2);
+            if (p.type === 'arrow') {
+                ctx.shadowBlur = 10; ctx.shadowColor = '#0f0'; ctx.fillStyle = '#0f0';
+                ctx.fillRect(0, -2, p.width, 4); // Corpo da flecha
+                ctx.beginPath(); ctx.moveTo(p.vx > 0 ? p.width : 0, -5); 
+                ctx.lineTo(p.vx > 0 ? p.width+8 : -8, 0); 
+                ctx.lineTo(p.vx > 0 ? p.width : 0, 5); ctx.fill(); // Ponta
+            } else if (p.type === 'hammer') {
+                ctx.rotate(p.rot);
+                ctx.shadowBlur = 10; ctx.shadowColor = '#ff0'; 
+                ctx.fillStyle = '#aa0'; ctx.fillRect(-2, -15, 4, 20); // Cabo
+                ctx.fillStyle = '#ff0'; ctx.fillRect(-8, -15, 16, 10); // Cabeça
+            }
+            ctx.restore();
+        }
+        ctx.shadowBlur = 0;
+
+        // Inimigos e Bosses
         for (let e of enemies) {
             ctx.save();
-            let hover = Math.sin((time * 5) + e.x) * 4; // Efeito de flutuação
+            let hover = Math.sin((time * 5) + e.x) * 4;
             ctx.translate(e.x + e.width/2, e.y + e.height/2 + hover);
             if (e.dir < 0) ctx.scale(-1, 1);
 
-            // Chassi do drone
+            let eColor = e.isBoss ? '#f0f' : '#f00';
+            let eDark = e.isBoss ? '#300' : '#111';
+
+            // Corpo do Drone
             ctx.beginPath();
             ctx.moveTo(0, -e.height/2);
             ctx.lineTo(e.width/2, -e.height/4);
@@ -604,27 +879,27 @@
             ctx.lineTo(-e.width/2, -e.height/4);
             ctx.closePath();
             
-            ctx.fillStyle = '#111'; ctx.fill();
-            ctx.shadowBlur = 10; ctx.shadowColor = '#f00';
-            ctx.strokeStyle = '#f00'; ctx.lineWidth = 2; ctx.stroke();
+            ctx.fillStyle = eDark; ctx.fill();
+            ctx.shadowBlur = e.isBoss ? 20 : 10; ctx.shadowColor = eColor;
+            ctx.strokeStyle = eColor; ctx.lineWidth = e.isBoss ? 4 : 2; ctx.stroke();
             
-            // Olho pulsante do drone
-            let pulse = (Math.sin(time * 10) + 1) / 2; // 0 a 1
-            ctx.fillStyle = `rgba(255, 0, 0, ${0.5 + pulse * 0.5})`;
-            ctx.beginPath(); ctx.arc(e.width/4, 0, 3 + pulse * 2, 0, Math.PI * 2); ctx.fill();
+            // Olho
+            let pulse = (Math.sin(time * 10) + 1) / 2;
+            ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
+            ctx.beginPath(); ctx.arc(e.width/4, 0, (e.isBoss?8:3) + pulse * 2, 0, Math.PI * 2); ctx.fill();
             ctx.shadowBlur = 0;
 
-            // Propulsor (Chamas em baixo)
-            ctx.fillStyle = '#f80';
+            // Propulsor
+            ctx.fillStyle = e.isBoss ? '#0ff' : '#f80';
             ctx.beginPath();
             ctx.moveTo(-e.width/4, e.height/2); ctx.lineTo(e.width/4, e.height/2);
-            ctx.lineTo(0, e.height/2 + 8 + Math.random() * 8); // Tremulação
+            ctx.lineTo(0, e.height/2 + 8 + Math.random() * 8 + (e.isBoss?10:0));
             ctx.closePath(); ctx.fill();
 
             ctx.restore();
         }
 
-        // Partículas (Brilho dinâmico)
+        // Partículas
         for (let p of particles) {
             ctx.fillStyle = p.color;
             ctx.shadowBlur = 5; ctx.shadowColor = p.color;
@@ -634,21 +909,19 @@
         }
         ctx.shadowBlur = 0;
 
-        // Protagonista Ninja Cibernético
+        // Protagonista Ninja
         if (player.invulnerableTimer <= 0 || Math.floor(Date.now() / 100) % 2 === 0) { 
             
-            // Desenha Rastro de Movimento (Trail)
             let isMoving = Math.abs(player.vx) > 0;
             if (isMoving || !player.isGrounded) {
                 for(let i=0; i<player.trail.length; i++) {
                     let pt = player.trail[i];
                     let alpha = (1 - (i/player.trail.length)) * 0.4;
-                    ctx.fillStyle = `rgba(255, 0, 255, ${alpha})`;
-                    
+                    ctx.fillStyle = pt.color; // Rastro com a cor da arma
+                    ctx.globalAlpha = alpha;
                     ctx.save();
                     ctx.translate(pt.x + player.width/2, pt.y + (pt.crouch?25:50)/2);
                     if (!player.facingRight) ctx.scale(-1, 1);
-                    // Sombra da forma base do corpo
                     ctx.beginPath();
                     ctx.moveTo(-10, -(pt.crouch?25:50)/2); ctx.lineTo(10, -(pt.crouch?25:50)/2);
                     ctx.lineTo(15, -5); ctx.lineTo(10, (pt.crouch?25:50)/2);
@@ -656,69 +929,71 @@
                     ctx.fill();
                     ctx.restore();
                 }
+                ctx.globalAlpha = 1.0;
             }
 
             ctx.save();
             let bobY = (player.isGrounded && isMoving) ? Math.sin(time * 20) * 3 : (player.isGrounded ? Math.sin(time * 5) * 1.5 : 0);
             ctx.translate(player.x + player.width/2, player.y + player.height/2 + bobY);
-            if (!player.facingRight) ctx.scale(-1, 1); // Vira o personagem fisicamente
+            if (!player.facingRight) ctx.scale(-1, 1); 
 
-            // Forma Corpo do Protagonista (Substituindo o Retângulo)
+            // Corpo Base
             ctx.beginPath();
-            ctx.moveTo(-10, -player.height/2); // Cabeça esq
-            ctx.lineTo(10, -player.height/2);  // Cabeça dir
-            ctx.lineTo(15, -10);               // Ombros/Costas
-            ctx.lineTo(10, player.height/2);   // Pé dir
-            ctx.lineTo(-10, player.height/2);  // Pé esq
-            ctx.lineTo(-15, -10);              // Costas esq
+            ctx.moveTo(-10, -player.height/2); 
+            ctx.lineTo(10, -player.height/2);  
+            ctx.lineTo(15, -10);               
+            ctx.lineTo(10, player.height/2);   
+            ctx.lineTo(-10, player.height/2);  
+            ctx.lineTo(-15, -10);              
             ctx.closePath();
             
-            ctx.fillStyle = '#1a0033'; ctx.fill(); // Traje Escuro
-            ctx.shadowBlur = 10; ctx.shadowColor = '#f0f';
-            ctx.strokeStyle = '#f0f'; ctx.lineWidth = 2; ctx.stroke(); // Borda Neon
+            ctx.fillStyle = '#1a0033'; ctx.fill(); 
+            ctx.shadowBlur = 10; ctx.shadowColor = player.weapon.color; // Contorno brilha a cor da arma
+            ctx.strokeStyle = player.weapon.color; ctx.lineWidth = 2; ctx.stroke(); 
             ctx.shadowBlur = 0;
 
-            // Visor Óptico
-            ctx.fillStyle = '#0ff'; ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
+            // Visor
+            ctx.fillStyle = '#fff'; ctx.shadowBlur = 10; ctx.shadowColor = '#fff';
             if (player.isCrouching) { ctx.fillRect(2, -player.height/2 + 3, 10, 4); } 
             else { ctx.fillRect(5, -player.height/2 + 8, 12, 5); }
             ctx.shadowBlur = 0;
 
-            // Cachecol/Echarpe de Energia (Física simulada)
+            // Cachecol dinâmico
             ctx.beginPath();
-            ctx.moveTo(-10, -player.height/2 + 10); // Amarrado no pescoço
+            ctx.moveTo(-10, -player.height/2 + 10);
             let scarfSwell = Math.sin(time * 12) * 5;
-            let scarfLen = isMoving ? 25 : 12; // Estica mais quando corre
+            let scarfLen = isMoving ? 25 : 12;
             ctx.quadraticCurveTo(-15 - scarfLen/2, -player.height/2 + 5 - scarfSwell, -10 - scarfLen, -player.height/2 + 15 + scarfSwell);
-            ctx.strokeStyle = '#f0f'; ctx.lineWidth = 3;
+            ctx.strokeStyle = player.weapon.color; ctx.lineWidth = 3;
             ctx.stroke();
-            ctx.restore();
-
-            // Animação de Corte de Ataque (Slash Fluido)
+            
+            // Animações de Ataque Meele (Espada e Escudo)
             if (player.isAttacking) {
-                ctx.save();
-                let reach = 40 * player.attackRangeMult;
-                let atkProgress = 1 - (player.attackTimer / player.attackDuration); // Vai de 0 a 1
+                let atkProgress = 1 - (player.attackTimer / player.attackDuration); 
                 
-                ctx.translate(player.facingRight ? player.x + player.width : player.x, player.y + player.height/2);
-                if (!player.facingRight) ctx.scale(-1, 1);
-                
-                // Arco do Golpe
-                ctx.beginPath();
-                ctx.moveTo(-10, -player.height/2 - 10);
-                ctx.quadraticCurveTo(reach + 10, -player.height/2, reach, player.height/2 + 10);
-                
-                ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
-                ctx.strokeStyle = '#0ff';
-                // Espessura do golpe aumenta e depois diminui (Fading)
-                ctx.lineWidth = 6 * Math.sin(atkProgress * Math.PI);
-                ctx.stroke();
-
-                // Faisca na ponta da espada
-                ctx.fillStyle = '#fff';
-                ctx.fillRect(reach * atkProgress, -5, 15, 3);
-                ctx.restore();
+                if (player.weapon.id === 'sword') {
+                    let reach = 50 * player.attackRangeMult;
+                    ctx.beginPath();
+                    ctx.moveTo(-10, -player.height/2 - 15);
+                    ctx.quadraticCurveTo(reach + 10, -player.height/2, reach, player.height/2 + 10);
+                    ctx.shadowBlur = 15; ctx.shadowColor = player.weapon.color;
+                    ctx.strokeStyle = player.weapon.color;
+                    ctx.lineWidth = 8 * Math.sin(atkProgress * Math.PI); // Fading
+                    ctx.stroke();
+                    ctx.fillStyle = '#fff'; ctx.fillRect(reach * atkProgress, -5, 15, 3); // Faisca
+                } else if (player.weapon.id === 'shield') {
+                    let radius = 35 * player.attackRangeMult;
+                    ctx.beginPath();
+                    // Escudo frontal em arco
+                    ctx.arc(10, 0, radius, -Math.PI/2.5, Math.PI/2.5);
+                    ctx.shadowBlur = 20; ctx.shadowColor = player.weapon.color;
+                    ctx.strokeStyle = `rgba(0, 0, 255, ${Math.sin(atkProgress * Math.PI)})`;
+                    ctx.lineWidth = 10;
+                    ctx.stroke();
+                }
             }
+
+            ctx.restore();
         }
 
         ctx.restore();
@@ -729,7 +1004,7 @@
         if (!game.lastTime) game.lastTime = timestamp;
         let dt = (timestamp - game.lastTime) / 1000;
         game.lastTime = timestamp;
-        if (dt > 0.1) dt = 0.1; // Previne saltos enormes se a aba ficar inativa
+        if (dt > 0.1) dt = 0.1; // Previne saltos massivos
 
         update(dt);
         draw();
@@ -741,16 +1016,19 @@
         document.getElementById('start-menu').classList.remove('active');
         document.getElementById('game-over-menu').classList.remove('active');
         
-        // Reset Variáveis
+        // Reset
         player.x = 100; player.y = 100; player.vy = 0; player.hp = player.maxHp;
         player.maxJumps = 1; player.attackRangeMult = 1; player.magnetRange = 0; player.speed = 250;
-        player.height = player.normalHeight;
-        player.trail = []; // Zera rastro
+        player.height = player.normalHeight; player.trail = []; 
+        player.weapon = weaponsList[0]; // Volta pra espada
         
-        platforms = []; enemies = []; crystals = []; particles = [];
-        game.cameraX = 0; game.distance = 0; game.crystals = 0; game.nextUpgradeDist = 500;
+        platforms = []; enemies = []; crystals = []; particles = []; projectiles = []; obstacles = [];
+        game.cameraX = 0; game.distance = 0; game.crystals = 0; 
+        game.nextUpgradeDist = 500; game.nextBossDist = 350; 
+        game.weaponCrystalCounter = 0; game.activeBoss = null;
+        game.isDay = false;
         
-        platforms.push({ x: 0, y: Math.min(300, canvas.height - 80), width: 850, height: 20 }); // Plataforma inicial garantida
+        platforms.push({ x: 0, y: Math.min(300, canvas.height - 80), width: 850, height: 20 });
         player.y = Math.min(300, canvas.height - 80) - player.height;
         player.vx = 0; player.vy = 0;
         player.isGrounded = false; player.isCrouching = false; player.facingRight = true;
@@ -759,12 +1037,13 @@
         player.invulnerableTimer = 0;
         player.hitEnemiesThisAttack.clear();
         game.enemiesDefeated = 0;
-        game.gameOverHandled = false;
 
         if(audioCtx.state === 'suspended') audioCtx.resume();
         document.getElementById('hud').style.display = 'flex';
+        document.getElementById('boss-ui').style.display = 'none';
         document.getElementById('pause-menu').classList.remove('active');
         document.getElementById('upgrade-menu').classList.remove('active');
+        
         game.state = 'PLAYING';
         game.lastTime = performance.now();
         startMusic();
@@ -785,6 +1064,7 @@
     function gameOver() {
         game.state = 'GAMEOVER';
         playSound('hit');
+        document.getElementById('boss-ui').style.display = 'none';
         
         // Salva Score
         if (game.distance > game.highScore) {
@@ -801,9 +1081,7 @@
         document.getElementById('hud').style.display = 'none';
     }
 
-    function resetGame() {
-        startGame();
-    }
+    function resetGame() { startGame(); }
 
     function returnToMenu() {
         stopMusic();
@@ -814,11 +1092,18 @@
         document.getElementById('game-over-menu').classList.remove('active');
         document.getElementById('start-menu').classList.add('active');
         document.getElementById('hud').style.display = 'none';
+        document.getElementById('boss-ui').style.display = 'none';
     }
 
     function updateHUD() {
         document.getElementById('scoreDisplay').innerText = `Distância: ${game.distance}m`;
         document.getElementById('crystalDisplay').innerText = `Cristais: ${game.crystals}`;
+        
+        let wDisplay = document.getElementById('weaponDisplay');
+        wDisplay.innerText = `Arma: ${player.weapon.name} (${game.weaponCrystalCounter}/25)`;
+        wDisplay.style.color = player.weapon.color;
+        wDisplay.style.textShadow = `0 0 5px ${player.weapon.color}`;
+
         document.getElementById('highScoreDisplay').innerText = `Recorde: ${game.highScore}m`;
         document.getElementById('hpDisplay').innerText = `Vida: ${'❤️'.repeat(player.hp)}`;
     }
@@ -826,12 +1111,11 @@
     // --- Sistema Roguelite (Upgrades) ---
     function triggerUpgradeMenu() {
         game.state = 'UPGRADE';
-        keys.right = false; keys.left = false; // Solta teclas
+        keys.right = false; keys.left = false; 
         
         const container = document.getElementById('upgrade-cards');
         container.innerHTML = '';
         
-        // Pega 3 opções aleatórias
         let shuffled = [...upgrades].sort(() => Math.random() - 0.5);
         let choices = shuffled.slice(0, Math.min(3, shuffled.length));
         
