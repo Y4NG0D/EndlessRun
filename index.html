@@ -23,7 +23,6 @@
             display: block; 
             box-shadow: 0 0 20px rgba(0, 255, 255, 0.5); 
             max-width: 100%; max-height: 100%;
-            transition: background 2s ease; /* Transição suave dia/noite */
         }
 
         /* HUD - Informações na tela */
@@ -39,7 +38,7 @@
         .hud-group { display: flex; flex-direction: column; gap: 8px; }
         .text-neon-blue { color: #0ff; text-shadow: 0 0 5px #0ff; }
         .text-neon-pink { color: #f0f; text-shadow: 0 0 5px #f0f; }
-        .text-weapon { color: #0f0; text-shadow: 0 0 5px #0f0; }
+        .text-weapon { color: #0f0; text-shadow: 0 0 5px #0f0; transition: color 0.3s; }
 
         /* Barras de Vida dos Chefes */
         #boss-ui {
@@ -143,7 +142,7 @@
         <h1>NEON RUNNER</h1>
         <p>Setas: mover | Cima: pular | Baixo: agachar<br>Espaço: atacar | Esc: pausar</p>
         <button onclick="startGame()">Iniciar Jogo</button>
-        <p class="menu-hint">Cuidado com lasers aéreos (agache). A cada 25 cristais você ganha uma nova arma.<br>Dia e noite mudam o ambiente a cada 100m. Sobreviva aos Chefes.</p>
+        <p class="menu-hint">Cuidado com lasers aéreos (agache). A cada 25 cristais você ganha uma nova arma com dinâmicas únicas de abate.<br>Dia e noite mudam o ambiente de forma fluida. Sobreviva!</p>
     </div>
 
     <div id="pause-menu" class="overlay">
@@ -187,6 +186,21 @@
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
 
+    // --- Auxiliar de Transição Suave de Cores (Lerp RGB) ---
+    function hexToRgb(hex) {
+        let bigint = parseInt(hex.replace('#',''), 16);
+        return {r: (bigint >> 16) & 255, g: (bigint >> 8) & 255, b: bigint & 255};
+    }
+    
+    function lerpColor(c1, c2, t) {
+        let rgb1 = hexToRgb(c1);
+        let rgb2 = hexToRgb(c2);
+        let r = Math.round(rgb1.r + (rgb2.r - rgb1.r) * t);
+        let g = Math.round(rgb1.g + (rgb2.g - rgb1.g) * t);
+        let b = Math.round(rgb1.b + (rgb2.b - rgb1.b) * t);
+        return `rgb(${r},${g},${b})`;
+    }
+
     // --- Sistema de Áudio (Web Audio API Simples) ---
     const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     function playSound(type) {
@@ -214,9 +228,58 @@
         } else if (type === 'boss_hit') {
             osc.type = 'sawtooth'; osc.frequency.setValueAtTime(80, now); osc.frequency.exponentialRampToValueAtTime(40, now + 0.3);
             gain.gain.setValueAtTime(0.3, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3); osc.start(now); osc.stop(now + 0.3);
-        } else if (type === 'boss_death') {
-            osc.type = 'square'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now + 1.0);
-            gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 1.0); osc.start(now); osc.stop(now + 1.0);
+        } else if (type === 'boss_death' || type === 'explode') {
+            osc.type = 'square'; osc.frequency.setValueAtTime(100, now); osc.frequency.exponentialRampToValueAtTime(10, now + (type === 'explode' ? 0.4 : 1.0));
+            gain.gain.setValueAtTime(0.5, now); gain.gain.exponentialRampToValueAtTime(0.01, now + (type === 'explode' ? 0.4 : 1.0)); osc.start(now); osc.stop(now + 1.0);
+        } else if (type === 'cut') {
+            osc.type = 'sawtooth'; osc.frequency.setValueAtTime(800, now); osc.frequency.exponentialRampToValueAtTime(200, now + 0.15);
+            gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15); osc.start(now); osc.stop(now + 0.15);
+        }
+    }
+
+    // --- Sistema Vocal (Voz Sintetizada do Protagonista) ---
+    function playVocal(type) {
+        if (audioCtx.state === 'suspended') audioCtx.resume();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        const filter = audioCtx.createBiquadFilter(); // Filtro formante
+        
+        osc.connect(filter); filter.connect(gain); gain.connect(audioCtx.destination);
+        const now = audioCtx.currentTime;
+        
+        if (type === 'atk') {
+            // Grito curto "Ha!"
+            osc.type = 'sawtooth'; 
+            osc.frequency.setValueAtTime(150, now);
+            osc.frequency.exponentialRampToValueAtTime(100, now + 0.15);
+            
+            filter.type = 'bandpass'; filter.frequency.setValueAtTime(1000, now);
+            
+            gain.gain.setValueAtTime(0.2, now); 
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
+            osc.start(now); osc.stop(now + 0.15);
+        } else if (type === 'hurt') {
+            // Gemido grave "Ugh"
+            osc.type = 'square'; 
+            osc.frequency.setValueAtTime(90, now);
+            osc.frequency.exponentialRampToValueAtTime(50, now + 0.3);
+            
+            filter.type = 'lowpass'; filter.frequency.setValueAtTime(400, now);
+            
+            gain.gain.setValueAtTime(0.25, now); 
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+            osc.start(now); osc.stop(now + 0.3);
+        } else if (type === 'weapon') {
+            // Murmúrio motivado "Oh yeah"
+            osc.type = 'triangle'; 
+            osc.frequency.setValueAtTime(130, now);
+            osc.frequency.linearRampToValueAtTime(180, now + 0.2);
+            
+            filter.type = 'bandpass'; filter.frequency.setValueAtTime(800, now);
+            
+            gain.gain.setValueAtTime(0.15, now); 
+            gain.gain.linearRampToValueAtTime(0.01, now + 0.2);
+            osc.start(now); osc.stop(now + 0.2);
         }
     }
 
@@ -257,7 +320,7 @@
 
     // --- Estado do Jogo (Persistência) ---
     const weaponsList = [
-        { id: 'sword', name: 'Espada', color: '#0ff' },
+        { id: 'sword', name: 'Espada de Plasma', color: '#0ff' },
         { id: 'bow', name: 'Arco Laser', color: '#0f0' },
         { id: 'hammer', name: 'Martelo Grav.', color: '#ff0' },
         { id: 'shield', name: 'Escudo Cinético', color: '#00f' }
@@ -269,8 +332,8 @@
         highScore: parseInt(localStorage.getItem('neonHighScore')) || 0,
         totalCrystals: parseInt(localStorage.getItem('neonTotalCrystals')) || 0,
         nextUpgradeDist: 500, nextBossDist: 350, enemiesDefeated: 0, 
-        isDay: false, weaponCrystalCounter: 0,
-        activeBoss: null
+        dayCycle: 0, targetDayCycle: 0, // Utilizados para suavização Day/Night (0 = Noite, 1 = Dia)
+        weaponCrystalCounter: 0, activeBoss: null
     };
 
     // --- Entidades ---
@@ -294,6 +357,7 @@
 
     let platforms = [];
     let enemies = [];
+    let deadBodies = []; // Para física avançada (cortes e explosões retardadas)
     let crystals = [];
     let particles = [];
     let projectiles = [];
@@ -303,9 +367,9 @@
     const upgrades = [
         { id: 'jump', name: 'Pulo Duplo', desc: 'Permite saltar no ar.', apply: () => player.maxJumps = 2 },
         { id: 'magnet', name: 'Ímã Neon', desc: 'Atrai cristais próximos.', apply: () => player.magnetRange = 250 },
-        { id: 'blade', name: 'Aprimoramento', desc: 'Aumenta área das armas brancas.', apply: () => player.attackRangeMult = 1.5 },
+        { id: 'blade', name: 'Aprimoramento', desc: 'Aumenta área das armas.', apply: () => player.attackRangeMult = 1.5 },
         { id: 'heal', name: 'Nanorreparo', desc: 'Recupera 1 de HP.', apply: () => player.hp = Math.min(player.maxHp, player.hp + 1) },
-        { id: 'speed', name: 'Sobrecarga', desc: 'Aumenta sua mobilidade e pulo.', apply: () => { player.speed += 40; player.jumpForce -= 30; } }
+        { id: 'speed', name: 'Sobrecarga', desc: 'Aumenta mobilidade.', apply: () => { player.speed += 40; player.jumpForce -= 30; } }
     ];
 
     // --- Controles (Teclado e Toque) ---
@@ -364,8 +428,9 @@
         if (game.state !== 'PLAYING' || player.isAttacking || player.cooldownTimer > 0) return;
         player.isAttacking = true;
         player.attackTimer = player.attackDuration;
-        player.hitEnemiesThisAttack.clear(); // Limpa a lista de atingidos deste golpe (para meele)
+        player.hitEnemiesThisAttack.clear();
         playSound('attack');
+        playVocal('atk'); // Emite ruído vocal ao atacar
 
         // Disparo de Projéteis baseado na arma
         if (player.weapon.id === 'bow') {
@@ -373,14 +438,14 @@
                 type: 'arrow',
                 x: player.facingRight ? player.x + player.width : player.x - 20,
                 y: player.y + 15, width: 20, height: 4,
-                vx: player.facingRight ? 600 : -600, vy: 0, life: 1.5
+                vx: player.facingRight ? 700 : -700, vy: 0, life: 1.5
             });
         } else if (player.weapon.id === 'hammer') {
             projectiles.push({
                 type: 'hammer',
                 x: player.x + player.width/2,
                 y: player.y - 10, width: 20, height: 20,
-                vx: player.facingRight ? 350 : -350, vy: -450, life: 3, rot: 0
+                vx: player.facingRight ? 400 : -400, vy: -500, life: 3, rot: 0
             });
         }
     }
@@ -398,33 +463,43 @@
         }
 
         playSound('hit');
+        playVocal('hurt'); // Geme grave ao receber dano
         createParticles(player.x + player.width/2, player.y + player.height/2, '#f00', 25);
         
         if (player.hp <= 0) gameOver();
         updateHUD();
     }
 
-    function damageEnemy(e, index, knockbackDir = 0) {
+    function damageEnemy(e, index, weaponType) {
         e.hp--;
-        createParticles(e.x + e.width/2, e.y + e.height/2, e.isBoss ? '#f0f' : '#0ff', e.isBoss ? 40 : 15);
+        createParticles(e.x + e.width/2, e.y + e.height/2, e.isBoss ? '#f0f' : '#0ff', e.isBoss ? 20 : 10);
         
-        if (knockbackDir !== 0) {
-            e.x += knockbackDir * 80; // Tranco do escudo
-            e.y -= 30; // Levanta o inimigo levemente
-        }
-
         if (e.hp <= 0) {
             if (e.isBoss) {
                 game.activeBoss = null;
-                playSound('boss_death');
                 document.getElementById('boss-ui').style.display = 'none';
-                // Boss morre solta 10 cristais
-                for(let k=0; k<10; k++){
+                // Boss morre solta muitos cristais
+                for(let k=0; k<15; k++){
                     crystals.push({ x: e.x + Math.random()*100 - 50, y: e.y + Math.random()*100 - 50, width: 10, height: 15 });
                 }
-            } else {
-                playSound('crystal');
             }
+
+            // --- Lógica Especial de Morte Visual Baseado na Arma ---
+            if (weaponType === 'sword') {
+                // Corpo cortado ao meio
+                deadBodies.push({ x: e.x, y: e.y, width: e.width, height: e.height/2, type: 'drone_half', half: 'top', vx: player.facingRight ? 150 : -150, vy: -250, rot: 0, vRot: -8, life: 1.5, isBoss: e.isBoss, dir: e.dir });
+                deadBodies.push({ x: e.x, y: e.y + e.height/2, width: e.width, height: e.height/2, type: 'drone_half', half: 'bottom', vx: player.facingRight ? 50 : -50, vy: -100, rot: 0, vRot: 5, life: 1.5, isBoss: e.isBoss, dir: e.dir });
+                playSound('cut');
+            } else if (weaponType === 'shield') {
+                // Escudo arremessa o inimigo com força G extrema, explodindo depois
+                deadBodies.push({ x: e.x, y: e.y, width: e.width, height: e.height, type: 'shield_fly', vx: player.facingRight ? 700 : -700, vy: -300, rot: 0, vRot: 25, life: 0.35, isBoss: e.isBoss, dir: e.dir });
+                playSound('hit');
+            } else {
+                // Arco e Martelo geram Hitkill explosivo
+                createParticles(e.x + e.width/2, e.y + e.height/2, '#0ff', 40);
+                playSound(e.isBoss ? 'boss_death' : 'explode');
+            }
+
             enemies.splice(index, 1);
             game.crystals += e.isBoss ? 15 : 2; // Bônus por kill
             game.enemiesDefeated++;
@@ -439,11 +514,12 @@
         game.weaponCrystalCounter += amount;
         if (game.weaponCrystalCounter >= 25) {
             game.weaponCrystalCounter -= 25;
-            // Troca de arma aleatória diferente da atual
             let filteredWeapons = weaponsList.filter(w => w.id !== player.weapon.id);
             player.weapon = filteredWeapons[Math.floor(Math.random() * filteredWeapons.length)];
+            
             playSound('weapon_change');
-            createParticles(player.x + player.width/2, player.y, player.weapon.color, 30);
+            playVocal('weapon'); // Voz exclamando powerup
+            createParticles(player.x + player.width/2, player.y, player.weapon.color, 40);
         }
     }
 
@@ -458,23 +534,17 @@
     function spawnPlatform() {
         let lastPlat = platforms.length > 0 ? platforms[platforms.length - 1] : { x: 0, y: 300, width: 800 };
         
-        // Cálculos para saltos e elevações extremas (Variabilidade de Altura)
         let minGapX = 60;
-        // Janela de salto ajustada.
         let maxGapX = Math.max(100, Math.min(220, player.speed * (Math.abs(player.jumpForce) / player.gravity) * 0.45));
         let gapX = Math.random() * (maxGapX - minGapX) + minGapX;
-        
-        // Agora as plataformas podem ser bem mais altas ou baixas
         let gapY = (Math.random() - 0.5) * 200; 
         
-        // Garante que não crie uma parede intransponível de uma vez
-        if (gapY < -120) gapX = minGapX; // Se for muito alto, deve ser próximo
+        if (gapY < -120) gapX = minGapX; 
         
         let newX = lastPlat.x + lastPlat.width + gapX;
-        let newY = Math.min(Math.max(lastPlat.y + gapY, 120), canvas.height - 40); // Limites de tela expandidos
-        let newWidth = Math.random() * 250 + 60; // Podem ser plataformas bem curtas agora (60)
+        let newY = Math.min(Math.max(lastPlat.y + gapY, 120), canvas.height - 40); 
+        let newWidth = Math.random() * 250 + 60; 
 
-        // Evita gerar terreno impossível caso o boss esteja ativo (força terreno liso)
         if (game.activeBoss) {
             gapY = (Math.random() - 0.5) * 40;
             newY = Math.min(Math.max(lastPlat.y + gapY, 200), 350);
@@ -486,7 +556,6 @@
         let plat = { x: newX, y: newY, width: newWidth, height: 20 };
         platforms.push(plat);
 
-        // Chance de Inimigo Terrestre (Drone Simples)
         if (Math.random() > 0.4 && newWidth > 100 && !game.activeBoss) {
             enemies.push({
                 x: newX + newWidth / 2, y: newY - 40, width: 30, height: 40,
@@ -494,17 +563,14 @@
             });
         }
         
-        // Obstáculo Aéreo (Laser de Agachamento)
         if (Math.random() > 0.6 && gapX > 80 && !game.activeBoss) {
-            // Posiciona exatamente na altura em que o jogador toma dano em pé, mas passa livre agachado
             obstacles.push({
                 x: newX + newWidth / 2, 
-                y: newY - 35, // Altura perigosa para jogador de 50px de altura
+                y: newY - 35, // Altura perigosa para jogador de 50px
                 width: 40, height: 10, speed: -180
             });
         }
         
-        // Cristais flutuantes (podem aparecer em sequências)
         if (Math.random() > 0.3) {
             let numCrystals = Math.floor(Math.random() * 3) + 1;
             for (let c=0; c<numCrystals; c++) {
@@ -533,19 +599,48 @@
         for(let i=0; i<count; i++) {
             particles.push({
                 x: x, y: y, size: Math.random() * 5 + 2, color: color,
-                vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300,
+                vx: (Math.random() - 0.5) * 400, vy: (Math.random() - 0.5) * 400,
                 life: 1.0 + Math.random()*0.5
             });
         }
+    }
+
+    // --- Auxiliar de Desenho do Drone ---
+    function drawDrone(ctx, w, h, isBoss, dir, pulseTime) {
+        let eColor = isBoss ? '#f0f' : '#f00';
+        let eDark = isBoss ? '#300' : '#111';
+
+        ctx.beginPath();
+        ctx.moveTo(0, -h/2);
+        ctx.lineTo(w/2, -h/4);
+        ctx.lineTo(w/2, h/4);
+        ctx.lineTo(0, h/2);
+        ctx.lineTo(-w/2, h/4);
+        ctx.lineTo(-w/2, -h/4);
+        ctx.closePath();
+        
+        ctx.fillStyle = eDark; ctx.fill();
+        ctx.shadowBlur = isBoss ? 20 : 10; ctx.shadowColor = eColor;
+        ctx.strokeStyle = eColor; ctx.lineWidth = isBoss ? 4 : 2; ctx.stroke();
+        
+        // Olho
+        let pulse = (Math.sin(pulseTime * 10) + 1) / 2;
+        ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
+        ctx.beginPath(); ctx.arc(w/4, 0, (isBoss?8:3) + pulse * 2, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
     }
 
     // --- Atualização Lógica (Loop) ---
     function update(dt) {
         if (game.state !== 'PLAYING') return;
 
-        // Tema de Cenário (Muda a cada 100m)
+        // Tema de Cenário (Suavização Dia/Noite a cada 100m)
         let currentPeriod = Math.floor(game.distance / 100);
-        game.isDay = (currentPeriod % 2 !== 0);
+        game.targetDayCycle = (currentPeriod % 2 !== 0) ? 1 : 0;
+        
+        // Interpola a transição visual
+        if (game.dayCycle < game.targetDayCycle) game.dayCycle = Math.min(1, game.dayCycle + dt * 0.5);
+        if (game.dayCycle > game.targetDayCycle) game.dayCycle = Math.max(0, game.dayCycle - dt * 0.5);
 
         // Gravidade e Timers do Jogador
         player.vy += player.gravity * dt;
@@ -559,7 +654,6 @@
         }
         if (player.cooldownTimer > 0) player.cooldownTimer -= dt;
 
-        // Movimento X e Rastro (O jogador controla a corrida)
         player.isCrouching = keys.down && player.isGrounded;
         let currentSpeed = player.isCrouching ? player.speed * 0.5 : player.speed;
         
@@ -567,20 +661,19 @@
         else if (keys.left) { player.vx = -currentSpeed; player.facingRight = false; }
         else { player.vx = 0; }
         
-        // Atualiza Rastro (Ghost Trail)
+        // Atualiza Rastro
         player.trail.unshift({x: player.x, y: player.y, crouch: player.isCrouching, color: player.weapon.color});
-        if(player.trail.length > 8) player.trail.pop(); // Limite do rastro
+        if(player.trail.length > 8) player.trail.pop();
 
         player.x += player.vx * dt;
         
         // Atualiza Câmera
         let targetCameraX = player.x - canvas.width * 0.3;
         if (targetCameraX > game.cameraX) game.cameraX = targetCameraX;
-        if (player.x < game.cameraX) player.x = game.cameraX; // Prende na borda esquerda
+        if (player.x < game.cameraX) player.x = game.cameraX;
 
         // Y Prev e Movimento Y
         let prevBottom = player.y + player.height;
-        // Ajuste fluido de Hitbox para agachar
         if (player.isCrouching && player.height !== player.crouchHeight) {
             player.y += (player.normalHeight - player.crouchHeight);
             player.height = player.crouchHeight;
@@ -592,7 +685,6 @@
         player.y += player.vy * dt;
         player.isGrounded = false;
 
-        // Limpa e gera mundo
         platforms = platforms.filter(p => p.x + p.width > game.cameraX - 200);
         while (platforms.length < 6 || platforms[platforms.length-1].x < game.cameraX + canvas.width * 2) {
             spawnPlatform();
@@ -601,26 +693,24 @@
         // Colisões com Plataformas
         for (let p of platforms) {
             if (checkAABB(player, p)) {
-                // Colisão de topo
                 if (player.vy > 0 && prevBottom <= p.y + 12) {
                     player.y = p.y - player.height;
                     player.vy = 0;
                     player.isGrounded = true;
                     player.jumpsLeft = player.maxJumps;
-                } else if (player.vy < 0 && player.y >= p.y + p.height - 15) { // Bate a cabeça
+                } else if (player.vy < 0 && player.y >= p.y + p.height - 15) {
                     player.vy = 0;
                     player.y = p.y + p.height;
-                } else { // Parede Lateral
+                } else {
                     player.x -= player.vx * dt;
                 }
             }
         }
 
-        // Morte por Queda
         if (player.y > canvas.height + 150) gameOver();
 
         // ------------------
-        // Caixa de Ataque Corpo a Corpo (Espada / Escudo)
+        // Ataque Corpo a Corpo (Espada / Escudo)
         // ------------------
         let atkBox = null;
         if (player.isAttacking && (player.weapon.id === 'sword' || player.weapon.id === 'shield')) {
@@ -639,17 +729,16 @@
             p.x += p.vx * dt;
             p.y += p.vy * dt;
             if (p.type === 'hammer') {
-                p.vy += 900 * dt; // Gravidade própria
-                p.rot += 15 * dt * (p.vx > 0 ? 1 : -1); // Rotação visual
+                p.vy += 900 * dt; 
+                p.rot += 15 * dt * (p.vx > 0 ? 1 : -1); 
             }
             p.life -= dt;
             
-            // Checa Colisão com Inimigos
             let hit = false;
             for (let j = enemies.length - 1; j >= 0; j--) {
                 let e = enemies[j];
                 if (checkAABB(p, e)) {
-                    damageEnemy(e, j);
+                    damageEnemy(e, j, p.type === 'arrow' ? 'bow' : 'hammer');
                     hit = true;
                     break;
                 }
@@ -661,27 +750,43 @@
         }
 
         // ------------------
-        // Atualiza Inimigos e Bosses
+        // Física dos Corpos Mortos (Pós-Abate)
+        // ------------------
+        for (let i = deadBodies.length - 1; i >= 0; i--) {
+            let b = deadBodies[i];
+            b.x += b.vx * dt;
+            b.y += b.vy * dt;
+            b.vy += 1200 * dt; // Gravidade afeta os corpos cortados/lançados
+            b.rot += b.vRot * dt;
+            b.life -= dt;
+
+            // Se for um corpo lançado pelo escudo e o timer zerar -> Explode!
+            if (b.type === 'shield_fly' && b.life <= 0) {
+                createParticles(b.x + b.width/2, b.y + b.height/2, '#0ff', 40);
+                playSound(b.isBoss ? 'boss_death' : 'explode');
+                deadBodies.splice(i, 1);
+                continue;
+            }
+
+            // Metades de corpos somem com o tempo
+            if (b.life <= 0) deadBodies.splice(i, 1);
+        }
+
+        // ------------------
+        // Atualiza Inimigos
         // ------------------
         for (let i = enemies.length - 1; i >= 0; i--) {
             let e = enemies[i];
             
-            // Remove se ficou pra trás
             if (!e.isBoss && e.x < game.cameraX - 200) { enemies.splice(i, 1); continue; }
 
-            // Comportamento
             if (e.isBoss) {
-                // Chefe voa perseguindo o jogador de cima e dá investidas
                 let hoverY = player.y - 150 + Math.sin(Date.now() / 400) * 100;
-                // Move na direção do jogador suavemente no eixo Y
                 e.y += (hoverY - e.y) * 2 * dt;
-                
-                // Padrão de patrulha ampla acima do jogador
                 e.x += e.speed * e.dir * dt;
                 if (e.x < player.x - 100) e.dir = 1;
                 if (e.x > player.x + 400) e.dir = -1;
             } else {
-                // Drone comum
                 e.x += e.speed * e.dir * dt;
                 if (e.x > e.patrolEnd) { e.x = e.patrolEnd; e.dir = -1; }
                 if (e.x < e.patrolStart) { e.x = e.patrolStart; e.dir = 1; }
@@ -691,22 +796,19 @@
             if (atkBox && checkAABB(atkBox, e)) {
                 if (!player.hitEnemiesThisAttack.has(e)) {
                     player.hitEnemiesThisAttack.add(e);
-                    // O Escudo empurra o inimigo!
-                    let knock = player.weapon.id === 'shield' ? (player.facingRight ? 1 : -1) : 0;
-                    damageEnemy(e, i, knock);
-                    if (e.hp <= 0) continue; // Morreu, sai do loop atual
+                    damageEnemy(e, i, player.weapon.id);
+                    if (e.hp <= 0) continue; 
                 }
             }
 
-            // Causa Dano no Jogador
             if (checkAABB(player, e)) {
-                let knock = player.x < e.x + e.width/2 ? -150 : 150;
+                let knock = player.x < e.x + e.width/2 ? -250 : 250;
                 takeDamage(knock);
             }
         }
 
         // ------------------
-        // Atualiza Obstáculos (Lasers - Esquiva com Agachamento)
+        // Atualiza Obstáculos (Lasers)
         // ------------------
         for (let i = obstacles.length - 1; i >= 0; i--) {
             let obs = obstacles[i];
@@ -714,7 +816,7 @@
             if (obs.x < game.cameraX - 100) { obstacles.splice(i, 1); continue; }
 
             if (checkAABB(player, obs)) {
-                takeDamage(-100);
+                takeDamage(-150);
                 obstacles.splice(i, 1);
             }
         }
@@ -724,7 +826,6 @@
             let c = crystals[i];
             if (c.x < game.cameraX - 100) { crystals.splice(i, 1); continue; }
 
-            // Lógica do Ímã
             if (player.magnetRange > 0) {
                 let dx = (player.x + player.width/2) - (c.x + c.width/2);
                 let dy = (player.y + player.height/2) - (c.y + c.height/2);
@@ -744,23 +845,19 @@
             }
         }
 
-        // Partículas
         for (let i = particles.length - 1; i >= 0; i--) {
             let p = particles[i];
             p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt * 1.5;
             if (p.life <= 0) particles.splice(i, 1);
         }
 
-        // Progresso e Eventos Especiais (Upgrades e Boss)
-        game.distance = Math.floor(player.x / 50); // Ajuste de escala da métrica
+        game.distance = Math.floor(player.x / 50); 
         
-        // Upgrade
         if (game.distance >= game.nextUpgradeDist) {
             game.nextUpgradeDist += 500;
             triggerUpgradeMenu();
         }
         
-        // Spawn do Boss
         if (game.distance >= game.nextBossDist && !game.activeBoss) {
             game.nextBossDist += 350;
             spawnBoss();
@@ -773,25 +870,24 @@
     function draw() {
         let time = Date.now() / 1000;
         
-        // Fundo dinâmico Dia/Noite
+        // Fundo com interpolação baseada em game.dayCycle (0 = Noite, 1 = Dia)
+        // Cor base: Noite (#0f0c29 a #24243e). Cor Dia: (#ff7e5f a #feb47b)
+        let topColor = lerpColor('#0f0c29', '#ff7e5f', game.dayCycle);
+        let midColor = lerpColor('#302b63', '#feb47b', game.dayCycle);
+        let botColor = lerpColor('#24243e', '#ffdd99', game.dayCycle);
+
         let bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-        if (game.isDay) {
-            bgGrad.addColorStop(0, '#ff7e5f'); // Pôr-do-sol laranja
-            bgGrad.addColorStop(1, '#feb47b');
-            ctx.fillStyle = bgGrad;
-        } else {
-            bgGrad.addColorStop(0, '#0f0c29'); // Noite Cyber
-            bgGrad.addColorStop(0.5, '#302b63');
-            bgGrad.addColorStop(1, '#24243e');
-            ctx.fillStyle = bgGrad;
-        }
+        bgGrad.addColorStop(0, topColor);
+        bgGrad.addColorStop(0.5, midColor);
+        bgGrad.addColorStop(1, botColor);
+        ctx.fillStyle = bgGrad;
         ctx.fillRect(0, 0, canvas.width, canvas.height);
 
         ctx.save();
         ctx.translate(-game.cameraX, 0);
 
-        // Grade Parallax (Altera cor baseado no tema)
-        ctx.strokeStyle = game.isDay ? 'rgba(255, 255, 255, 0.15)' : 'rgba(0, 255, 255, 0.1)';
+        // Grade Parallax (suavizada via rgba blend)
+        ctx.strokeStyle = `rgba(255, 255, 255, ${0.1 + game.dayCycle * 0.15})`;
         ctx.lineWidth = 1;
         let bgOffset = game.cameraX * 0.5;
         ctx.beginPath();
@@ -801,18 +897,20 @@
         }
         ctx.stroke();
 
-        // Plataformas
+        // Plataformas (Interpolação de cor)
+        let pFill = lerpColor('#111111', '#331111', game.dayCycle);
+        let pStroke = lerpColor('#00ffff', '#ffff00', game.dayCycle);
+
         for (let p of platforms) {
-            ctx.fillStyle = game.isDay ? '#311' : '#111'; 
+            ctx.fillStyle = pFill; 
             ctx.fillRect(p.x, p.y, p.width, p.height);
-            let pColor = game.isDay ? '#ff0' : '#0ff'; // Amarelo dia, Azul noite
-            ctx.strokeStyle = pColor; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.width, p.height);
-            ctx.shadowBlur = 10; ctx.shadowColor = pColor;
+            ctx.strokeStyle = pStroke; ctx.lineWidth = 2; ctx.strokeRect(p.x, p.y, p.width, p.height);
+            ctx.shadowBlur = 10; ctx.shadowColor = pStroke;
             ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(p.x + p.width, p.y); ctx.stroke();
             ctx.shadowBlur = 0;
         }
 
-        // Cristais (Flutuantes Giratórios)
+        // Cristais
         ctx.shadowBlur = 15; ctx.shadowColor = '#0ff';
         for (let c of crystals) {
             ctx.save();
@@ -834,60 +932,75 @@
         for (let obs of obstacles) {
             ctx.fillStyle = '#f0f'; ctx.shadowBlur = 15; ctx.shadowColor = '#f0f';
             ctx.fillRect(obs.x, obs.y, obs.width, obs.height);
-            // Miolo branco
             ctx.fillStyle = '#fff'; ctx.fillRect(obs.x+5, obs.y+2, obs.width-10, obs.height-4);
             ctx.shadowBlur = 0;
         }
 
-        // Projéteis do Jogador
+        // Corpos Mortos (Cortados ao meio ou Voando com o Escudo)
+        for (let b of deadBodies) {
+            ctx.save();
+            ctx.translate(b.x + b.width/2, b.y + b.height/2);
+            ctx.rotate(b.rot);
+            if (b.dir < 0) ctx.scale(-1, 1);
+
+            // Renderiza metade de um Drone cortado
+            if (b.type === 'drone_half') {
+                ctx.beginPath();
+                // O clip restringe o desenho apenas para metade da caixa
+                if (b.half === 'top') {
+                    ctx.rect(-b.width/2, -b.height/2, b.width, b.height); 
+                } else {
+                    ctx.rect(-b.width/2, -b.height/2, b.width, b.height); 
+                }
+                ctx.clip();
+                
+                // Desenha o drone completo dentro do clip ajustando o eixo
+                let shiftY = b.half === 'top' ? b.height/2 : -b.height/2;
+                ctx.translate(0, shiftY);
+                drawDrone(ctx, b.width, b.height * 2, b.isBoss, b.dir, 0);
+                
+                // Faíscas no corte
+                ctx.fillStyle = '#ff0';
+                ctx.fillRect(-b.width/4 + Math.random()*b.width/2, (b.half === 'top' ? -shiftY : shiftY), 3, 3);
+            } 
+            // Renderiza Drone sendo esmagado pelo escudo
+            else if (b.type === 'shield_fly') {
+                drawDrone(ctx, b.width, b.height, b.isBoss, b.dir, 0);
+                ctx.fillStyle = 'rgba(0, 0, 255, 0.4)';
+                ctx.fillRect(-b.width/2, -b.height/2, b.width, b.height);
+            }
+            
+            ctx.restore();
+        }
+
+        // Projéteis
         for (let p of projectiles) {
             ctx.save();
             ctx.translate(p.x, p.y + p.height/2);
             if (p.type === 'arrow') {
                 ctx.shadowBlur = 10; ctx.shadowColor = '#0f0'; ctx.fillStyle = '#0f0';
-                ctx.fillRect(0, -2, p.width, 4); // Corpo da flecha
+                ctx.fillRect(0, -2, p.width, 4); 
                 ctx.beginPath(); ctx.moveTo(p.vx > 0 ? p.width : 0, -5); 
                 ctx.lineTo(p.vx > 0 ? p.width+8 : -8, 0); 
-                ctx.lineTo(p.vx > 0 ? p.width : 0, 5); ctx.fill(); // Ponta
+                ctx.lineTo(p.vx > 0 ? p.width : 0, 5); ctx.fill(); 
             } else if (p.type === 'hammer') {
                 ctx.rotate(p.rot);
                 ctx.shadowBlur = 10; ctx.shadowColor = '#ff0'; 
-                ctx.fillStyle = '#aa0'; ctx.fillRect(-2, -15, 4, 20); // Cabo
-                ctx.fillStyle = '#ff0'; ctx.fillRect(-8, -15, 16, 10); // Cabeça
+                ctx.fillStyle = '#aa0'; ctx.fillRect(-2, -15, 4, 20); 
+                ctx.fillStyle = '#ff0'; ctx.fillRect(-8, -15, 16, 10); 
             }
             ctx.restore();
         }
         ctx.shadowBlur = 0;
 
-        // Inimigos e Bosses
+        // Inimigos Vivos
         for (let e of enemies) {
             ctx.save();
             let hover = Math.sin((time * 5) + e.x) * 4;
             ctx.translate(e.x + e.width/2, e.y + e.height/2 + hover);
             if (e.dir < 0) ctx.scale(-1, 1);
 
-            let eColor = e.isBoss ? '#f0f' : '#f00';
-            let eDark = e.isBoss ? '#300' : '#111';
-
-            // Corpo do Drone
-            ctx.beginPath();
-            ctx.moveTo(0, -e.height/2);
-            ctx.lineTo(e.width/2, -e.height/4);
-            ctx.lineTo(e.width/2, e.height/4);
-            ctx.lineTo(0, e.height/2);
-            ctx.lineTo(-e.width/2, e.height/4);
-            ctx.lineTo(-e.width/2, -e.height/4);
-            ctx.closePath();
-            
-            ctx.fillStyle = eDark; ctx.fill();
-            ctx.shadowBlur = e.isBoss ? 20 : 10; ctx.shadowColor = eColor;
-            ctx.strokeStyle = eColor; ctx.lineWidth = e.isBoss ? 4 : 2; ctx.stroke();
-            
-            // Olho
-            let pulse = (Math.sin(time * 10) + 1) / 2;
-            ctx.fillStyle = `rgba(255, 255, 255, ${0.5 + pulse * 0.5})`;
-            ctx.beginPath(); ctx.arc(e.width/4, 0, (e.isBoss?8:3) + pulse * 2, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
+            drawDrone(ctx, e.width, e.height, e.isBoss, e.dir, time);
 
             // Propulsor
             ctx.fillStyle = e.isBoss ? '#0ff' : '#f80';
@@ -895,7 +1008,6 @@
             ctx.moveTo(-e.width/4, e.height/2); ctx.lineTo(e.width/4, e.height/2);
             ctx.lineTo(0, e.height/2 + 8 + Math.random() * 8 + (e.isBoss?10:0));
             ctx.closePath(); ctx.fill();
-
             ctx.restore();
         }
 
@@ -917,7 +1029,7 @@
                 for(let i=0; i<player.trail.length; i++) {
                     let pt = player.trail[i];
                     let alpha = (1 - (i/player.trail.length)) * 0.4;
-                    ctx.fillStyle = pt.color; // Rastro com a cor da arma
+                    ctx.fillStyle = pt.color; 
                     ctx.globalAlpha = alpha;
                     ctx.save();
                     ctx.translate(pt.x + player.width/2, pt.y + (pt.crouch?25:50)/2);
@@ -948,7 +1060,7 @@
             ctx.closePath();
             
             ctx.fillStyle = '#1a0033'; ctx.fill(); 
-            ctx.shadowBlur = 10; ctx.shadowColor = player.weapon.color; // Contorno brilha a cor da arma
+            ctx.shadowBlur = 10; ctx.shadowColor = player.weapon.color;
             ctx.strokeStyle = player.weapon.color; ctx.lineWidth = 2; ctx.stroke(); 
             ctx.shadowBlur = 0;
 
@@ -967,7 +1079,7 @@
             ctx.strokeStyle = player.weapon.color; ctx.lineWidth = 3;
             ctx.stroke();
             
-            // Animações de Ataque Meele (Espada e Escudo)
+            // Animações de Ataque Meele
             if (player.isAttacking) {
                 let atkProgress = 1 - (player.attackTimer / player.attackDuration); 
                 
@@ -978,17 +1090,16 @@
                     ctx.quadraticCurveTo(reach + 10, -player.height/2, reach, player.height/2 + 10);
                     ctx.shadowBlur = 15; ctx.shadowColor = player.weapon.color;
                     ctx.strokeStyle = player.weapon.color;
-                    ctx.lineWidth = 8 * Math.sin(atkProgress * Math.PI); // Fading
+                    ctx.lineWidth = 8 * Math.sin(atkProgress * Math.PI); 
                     ctx.stroke();
-                    ctx.fillStyle = '#fff'; ctx.fillRect(reach * atkProgress, -5, 15, 3); // Faisca
+                    ctx.fillStyle = '#fff'; ctx.fillRect(reach * atkProgress, -5, 15, 3); 
                 } else if (player.weapon.id === 'shield') {
                     let radius = 35 * player.attackRangeMult;
                     ctx.beginPath();
-                    // Escudo frontal em arco
                     ctx.arc(10, 0, radius, -Math.PI/2.5, Math.PI/2.5);
                     ctx.shadowBlur = 20; ctx.shadowColor = player.weapon.color;
                     ctx.strokeStyle = `rgba(0, 0, 255, ${Math.sin(atkProgress * Math.PI)})`;
-                    ctx.lineWidth = 10;
+                    ctx.lineWidth = 15;
                     ctx.stroke();
                 }
             }
@@ -1004,7 +1115,7 @@
         if (!game.lastTime) game.lastTime = timestamp;
         let dt = (timestamp - game.lastTime) / 1000;
         game.lastTime = timestamp;
-        if (dt > 0.1) dt = 0.1; // Previne saltos massivos
+        if (dt > 0.1) dt = 0.1; 
 
         update(dt);
         draw();
@@ -1016,17 +1127,16 @@
         document.getElementById('start-menu').classList.remove('active');
         document.getElementById('game-over-menu').classList.remove('active');
         
-        // Reset
         player.x = 100; player.y = 100; player.vy = 0; player.hp = player.maxHp;
         player.maxJumps = 1; player.attackRangeMult = 1; player.magnetRange = 0; player.speed = 250;
         player.height = player.normalHeight; player.trail = []; 
-        player.weapon = weaponsList[0]; // Volta pra espada
+        player.weapon = weaponsList[0]; 
         
-        platforms = []; enemies = []; crystals = []; particles = []; projectiles = []; obstacles = [];
+        platforms = []; enemies = []; deadBodies = []; crystals = []; particles = []; projectiles = []; obstacles = [];
         game.cameraX = 0; game.distance = 0; game.crystals = 0; 
         game.nextUpgradeDist = 500; game.nextBossDist = 350; 
         game.weaponCrystalCounter = 0; game.activeBoss = null;
-        game.isDay = false;
+        game.dayCycle = 0; game.targetDayCycle = 0;
         
         platforms.push({ x: 0, y: Math.min(300, canvas.height - 80), width: 850, height: 20 });
         player.y = Math.min(300, canvas.height - 80) - player.height;
@@ -1064,9 +1174,9 @@
     function gameOver() {
         game.state = 'GAMEOVER';
         playSound('hit');
+        playVocal('hurt');
         document.getElementById('boss-ui').style.display = 'none';
         
-        // Salva Score
         if (game.distance > game.highScore) {
             game.highScore = game.distance;
             localStorage.setItem('neonHighScore', game.highScore);
